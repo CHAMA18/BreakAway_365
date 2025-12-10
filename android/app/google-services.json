@@ -1,0 +1,178 @@
+{
+  "project_info": {
+    "project_number": "73008181996",
+    "project_id": "break-away365-36gi4f",
+    "storage_bucket": "break-away365-36gi4f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:73008181996:android:099937e184971942d76bc9",
+        "android_client_info": {
+          "package_name": "com.mycompany.CounterApp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "73008181996-96fko8japosa6tm1bqcjq3jm1sle3r32.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTYWIrGHGlsPL8pbVG-6iYbMaToTdhrvI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "73008181996-96fko8japosa6tm1bqcjq3jm1sle3r32.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "73008181996-0hr41tpdgnuq63mq0v0kr1qiov8eqn3v.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.CounterApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:73008181996:android:9cedbf59557cfec1d76bc9",
+        "android_client_info": {
+          "package_name": "com.mycompany.breakaway365"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "73008181996-0b70133q9msulffo8orcbpnojr9l6l2b.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mycompany.breakaway365",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "73008181996-96fko8japosa6tm1bqcjq3jm1sle3r32.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTYWIrGHGlsPL8pbVG-6iYbMaToTdhrvI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "73008181996-96fko8japosa6tm1bqcjq3jm1sle3r32.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "73008181996-0hr41tpdgnuq63mq0v0kr1qiov8eqn3v.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.CounterApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:73008181996:android:0e5429c3c1bdf815d76bc9",
+        "android_client_info": {
+          "package_name": "com.mycompany.breakaway365mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "73008181996-87k3uc5aqko94i1vuaq64egbphjmu6t7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mycompany.breakaway365mobile",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "73008181996-96fko8japosa6tm1bqcjq3jm1sle3r32.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTYWIrGHGlsPL8pbVG-6iYbMaToTdhrvI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "73008181996-96fko8japosa6tm1bqcjq3jm1sle3r32.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "73008181996-0hr41tpdgnuq63mq0v0kr1qiov8eqn3v.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.CounterApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:73008181996:android:177e8c3a5c746575d76bc9",
+        "android_client_info": {
+          "package_name": "com.mycompany.breakaway365mobilevs"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "73008181996-gtquajm3joct577nf66ek66b47djjmet.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mycompany.breakaway365mobilevs",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "73008181996-96fko8japosa6tm1bqcjq3jm1sle3r32.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTYWIrGHGlsPL8pbVG-6iYbMaToTdhrvI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "73008181996-96fko8japosa6tm1bqcjq3jm1sle3r32.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "73008181996-0hr41tpdgnuq63mq0v0kr1qiov8eqn3v.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.CounterApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
