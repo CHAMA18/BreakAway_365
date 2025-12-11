@@ -1162,6 +1162,7 @@ class _MessageQuickActionButton extends StatelessWidget {
   const _MessageQuickActionButton({
     required this.icon,
     required this.label,
+    this.isHighlighted = false,
   });
 
   final IconData icon;
@@ -8568,6 +8569,7 @@ class _AdminSidebarItem {
     required this.icon,
     required this.label,
     this.section,
+    this.isActive = false,
     this.isDestructive = false,
     this.onTap,
   });
@@ -16017,6 +16019,7 @@ class _AgencyFilterOption {
   const _AgencyFilterOption({
     required this.label,
     required this.minMembers,
+    this.maxMembers,
   });
 
   final String label;
@@ -37536,6 +37539,8 @@ class _FolderListColumn extends StatelessWidget {
     required this.items,
     required this.isVideo,
     required this.onItemTap,
+    this.isAdmin = false,
+    this.onDeleteTap,
   });
 
   final String title;
@@ -43103,6 +43108,7 @@ class _LibraryCardData {
     this.badgeLabel,
     this.showButton = false,
     this.thumbnailUrl,
+    this.thumbnailAsset,
     this.videoUrl,
     this.downloadUrl,
     this.primaryTopicNormalized,
@@ -45441,6 +45447,10 @@ class _TopNavChip extends StatelessWidget {
     this.inactiveColor,
     this.onTap,
     this.activeIcon,
+    this.activeTextColor,
+    this.inactiveTextColor,
+    this.activeIconColor,
+    this.inactiveIconColor,
   });
 
   final String label;
