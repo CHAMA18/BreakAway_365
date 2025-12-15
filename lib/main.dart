@@ -39189,6 +39189,169 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
     super.dispose();
   }
 
+  void _refreshContent() {
+    setState(() {
+      _contentFuture = _fetchCourseContent();
+    });
+  }
+
+  Future<void> _confirmDeleteVideo(BuildContext context, _LibraryCardData video) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Delete Video',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${video.title}"? This action cannot be undone.',
+          style: const TextStyle(fontSize: 15, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF6B7280),
+              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _deleteVideo(context, video);
+    }
+  }
+
+  Future<void> _deleteVideo(BuildContext context, _LibraryCardData video) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final firestore = FirebaseFirestore.instance;
+      
+      // Delete from video collection (try both 'video' and 'videos')
+      try {
+        await firestore.collection('video').doc(video.id).delete();
+      } catch (_) {
+        await firestore.collection('videos').doc(video.id).delete();
+      }
+      
+      // Remove reference from course's videos array
+      final courseRef = firestore.collection('courses').doc(widget.course.id);
+      final videoRef = firestore.collection('video').doc(video.id);
+      final videosRef = firestore.collection('videos').doc(video.id);
+      
+      await courseRef.update({
+        'videos': FieldValue.arrayRemove([videoRef, videosRef, video.id]),
+      });
+      
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text('Successfully deleted "${video.title}"'),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+      _refreshContent();
+    } catch (error) {
+      debugPrint('Failed to delete video: $error');
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('Failed to delete video. Please try again.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteDocument(BuildContext context, _LibraryCardData doc) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Delete Document',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${doc.title}"? This action cannot be undone.',
+          style: const TextStyle(fontSize: 15, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF6B7280),
+              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _deleteDocument(context, doc);
+    }
+  }
+
+  Future<void> _deleteDocument(BuildContext context, _LibraryCardData doc) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final firestore = FirebaseFirestore.instance;
+      
+      // Delete from documents collection
+      await firestore.collection('documents').doc(doc.id).delete();
+      
+      // Remove reference from course's docs array
+      final courseRef = firestore.collection('courses').doc(widget.course.id);
+      final docRef = firestore.collection('documents').doc(doc.id);
+      
+      await courseRef.update({
+        'docs': FieldValue.arrayRemove([docRef, doc.id]),
+      });
+      
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text('Successfully deleted "${doc.title}"'),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+      _refreshContent();
+    } catch (error) {
+      debugPrint('Failed to delete document: $error');
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('Failed to delete document. Please try again.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+    }
+  }
+
   Future<Map<String, List<_LibraryCardData>>> _fetchCourseContent() async {
     final firestore = FirebaseFirestore.instance;
     final videos = <_LibraryCardData>[];
@@ -39520,6 +39683,38 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
                         ),
                       ),
                     ),
+                    // Admin delete button
+                    if (widget.isAdmin)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _confirmDeleteVideo(context, item),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.95),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.delete_outline_rounded,
+                                color: Color(0xFFEF4444),
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -39681,6 +39876,25 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
                             size: 16,
                             color: ContentLibraryPage._buttonBlue.withValues(alpha: 0.8),
                           ),
+                        if (widget.isAdmin) ...[
+                          const SizedBox(width: 8),
+                          InkWell(
+                            onTap: () => _confirmDeleteDocument(context, item),
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEE2E2),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Icon(
+                                Icons.delete_outline_rounded,
+                                size: 16,
+                                color: Color(0xFFEF4444),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],
