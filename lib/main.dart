@@ -36156,32 +36156,7 @@ class _BreakawayToolsView extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final bool isAdmin;
 
-  static const List<_BreakawayToolFolderData> _folders = [
-    _BreakawayToolFolderData(
-      label: 'Breakaway Blueprints',
-      keywords: ['blueprint', 'blueprints', 'breakaway blueprint'],
-    ),
-    _BreakawayToolFolderData(
-      label: 'KEEP Documents',
-      keywords: ['keep', 'keeping', 'keep documents', 'keeping culture'],
-    ),
-    _BreakawayToolFolderData(
-      label: 'Breakaway Framework',
-      keywords: ['framework', 'breakaway framework'],
-    ),
-    _BreakawayToolFolderData(
-      label: 'October 2025: Owner',
-      keywords: ['october 2025', 'owner', 'owner playbook'],
-    ),
-    _BreakawayToolFolderData(
-      label: 'THINK Documents',
-      keywords: ['think', 'thinking', 'think documents'],
-    ),
-    _BreakawayToolFolderData(
-      label: 'Assessments',
-      keywords: ['assessment', 'assessments', 'evaluation'],
-    ),
-  ];
+
 
   int _columnsForWidth(double width) {
     if (width >= 1400) return 4;
@@ -36295,21 +36270,39 @@ class _BreakawayToolsView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _folders.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              mainAxisSpacing: 24,
-              crossAxisSpacing: 24,
-              childAspectRatio: columns == 1 ? 1.2 : 1.05,
-            ),
-            itemBuilder: (context, index) {
-              final folder = _folders[index];
-              return _BreakawayToolCard(
-                data: folder,
-                onTap: () => _openFolder(context, folder),
+          FutureBuilder<List<_LibraryCardData>>(
+            future: _fetchBreakawayCourses(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.hasError) {
+                return const Text('Error loading courses');
+              }
+
+              final courses = snapshot.data ?? [];
+              if (courses.isEmpty) {
+                return const Text('No courses available');
+              }
+
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: courses.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  mainAxisSpacing: 24,
+                  crossAxisSpacing: 24,
+                  childAspectRatio: columns == 1 ? 1.2 : 1.05,
+                ),
+                itemBuilder: (context, index) {
+                  final course = courses[index];
+                  return _BreakawayCourseCard(
+                    course: course,
+                    onTap: () => _openCourse(context, course),
+                  );
+                },
               );
             },
           ),
@@ -36318,11 +36311,156 @@ class _BreakawayToolsView extends StatelessWidget {
     );
   }
 
-  void _openFolder(BuildContext context, _BreakawayToolFolderData folder) {
+  Future<List<_LibraryCardData>> _fetchBreakawayCourses() async {
+    final firestore = FirebaseFirestore.instance;
+    final List<_LibraryCardData> courses = [];
+
+    try {
+      final coursesSnapshot = await firestore
+          .collection('courses')
+          .where('topic', isEqualTo: 'BREAKAWAY365')
+          .get();
+
+      for (var doc in coursesSnapshot.docs) {
+        final courseData = doc.data();
+        final courseCard = _FirestoreCourseGrid._mapSnapshot(doc, paletteIndex: courses.length, showContinueButton: false);
+        if (courseCard != null) {
+          courses.add(courseCard);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching BreakAway courses: $e');
+    }
+
+    return courses;
+  }
+
+  void _openCourse(BuildContext context, _LibraryCardData course) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            BreakawayToolDetailPage(folder: folder, isAdmin: isAdmin),
+        builder: (_) => _BreakawayCourseDetailPage(
+          course: course,
+          isAdmin: isAdmin,
+        ),
+      ),
+    );
+  }
+
+
+}
+
+class _BreakawayCourseCard extends StatelessWidget {
+  const _BreakawayCourseCard({required this.course, required this.onTap});
+
+  final _LibraryCardData course;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: ContentLibraryPage._borderColor),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0D0F172A),
+              blurRadius: 18,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Thumbnail
+            Container(
+              height: 120,
+              decoration: BoxDecoration(
+                color: course.thumbnailColor,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
+              ),
+              child: course.thumbnailUrl != null
+                  ? ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                      ),
+                      child: Image.network(
+                        course.thumbnailUrl!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: 120,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.folder,
+                      size: 48,
+                      color: Colors.white,
+                    ),
+            ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    course.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: ContentLibraryPage._titleColor,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    course.subtitle,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: ContentLibraryPage._mutedColor,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: course.meta.map((meta) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: ContentLibraryPage._borderColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(meta.icon, size: 14, color: ContentLibraryPage._mutedColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            meta.label,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: ContentLibraryPage._mutedColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -37007,6 +37145,372 @@ class BreakawayToolDetailPage extends StatelessWidget {
   }
 }
 
+class _BreakawayCourseDetailPage extends StatefulWidget {
+  const _BreakawayCourseDetailPage({required this.course, this.isAdmin = false});
+
+  final _LibraryCardData course;
+  final bool isAdmin;
+
+  @override
+  State<_BreakawayCourseDetailPage> createState() => _BreakawayCourseDetailPageState();
+}
+
+class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  late Future<Map<String, List<_LibraryCardData>>> _contentFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _contentFuture = _fetchCourseContent();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<Map<String, List<_LibraryCardData>>> _fetchCourseContent() async {
+    final firestore = FirebaseFirestore.instance;
+    final videos = <_LibraryCardData>[];
+    final documents = <_LibraryCardData>[];
+
+    try {
+      // Get course document
+      final courseDoc = await firestore.collection('courses').doc(widget.course.id).get();
+      if (!courseDoc.exists) return {'videos': videos, 'documents': documents};
+
+      final courseData = courseDoc.data() ?? {};
+
+      // Query videos from 'videos' field
+      final videosField = courseData['videos'];
+      if (videosField is List) {
+        for (final item in videosField) {
+          if (item is DocumentReference) {
+            try {
+              final videoDoc = await item.get();
+              if (videoDoc.exists) {
+                final videoData = videoDoc.data() as Map<String, dynamic>?;
+                if (videoData != null) {
+                  final card = _mapVideoToCard(videoDoc.id, videoData, videos.length, courseData);
+                  if (card != null) videos.add(card);
+                }
+              }
+            } catch (e) {
+              debugPrint('Error fetching video: $e');
+            }
+          }
+        }
+      }
+
+      // Query documents from 'docs' field
+      final docsField = courseData['docs'];
+      if (docsField is List) {
+        for (final item in docsField) {
+          if (item is DocumentReference) {
+            try {
+              final docSnapshot = await item.get();
+              if (docSnapshot.exists) {
+                final docData = docSnapshot.data() as Map<String, dynamic>?;
+                if (docData != null) {
+                  final card = _mapDocumentToCard(docSnapshot.id, docData, documents.length, courseData);
+                  if (card != null) documents.add(card);
+                }
+              }
+            } catch (e) {
+              debugPrint('Error fetching document: $e');
+            }
+          }
+        }
+      }
+
+    } catch (e) {
+      debugPrint('Error fetching course content: $e');
+    }
+
+    return {'videos': videos, 'documents': documents};
+  }
+
+  _LibraryCardData? _mapVideoToCard(String id, Map<String, dynamic> data, int index, Map<String, dynamic> courseData) {
+    final title = data['title'] as String? ?? data['video_title'] as String? ?? 'Video';
+    final description = data['description'] as String? ?? '';
+    final videoUrl = data['video_url'] as String? ?? data['videoUrl'] as String?;
+    final thumbnailUrl = data['thumbnailUrl'] as String? ?? data['thumbnail'] as String?;
+    final topic = courseData['topic'] as String?;
+
+    return _LibraryCardData(
+      id: id,
+      title: title,
+      subtitle: description,
+      thumbnailColor: _resolveColor(topic, index),
+      meta: const [_LibraryMetaData(icon: Icons.play_circle_outline, label: 'Video')],
+      tags: topic != null ? [topic] : [],
+      normalizedTags: topic != null ? [topic.toLowerCase()] : [],
+      thumbnailUrl: thumbnailUrl,
+      showButton: false,
+      videoUrl: videoUrl,
+      originalData: {...data, ...courseData},
+    );
+  }
+
+  _LibraryCardData? _mapDocumentToCard(String id, Map<String, dynamic> data, int index, Map<String, dynamic> courseData) {
+    final title = data['doc_name'] as String? ?? data['title'] as String? ?? 'Document';
+    final description = data['description'] as String? ?? '';
+    final docUrl = data['docUrl'] as String?;
+    final topic = courseData['topic'] as String?;
+
+    return _LibraryCardData(
+      id: id,
+      title: title,
+      subtitle: description,
+      thumbnailColor: _resolveColor(topic, index),
+      meta: const [_LibraryMetaData(icon: Icons.description_outlined, label: 'Document')],
+      tags: topic != null ? [topic] : [],
+      normalizedTags: topic != null ? [topic.toLowerCase()] : [],
+      showButton: false,
+      downloadUrl: docUrl,
+      originalData: {...data, ...courseData},
+    );
+  }
+
+  Color _resolveColor(String? topic, int index) {
+    // Simple color resolution based on index
+    final colors = [Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.red];
+    return colors[index % colors.length];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F8FB),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                    style: IconButton.styleFrom(
+                      foregroundColor: ContentLibraryPage._buttonBlue,
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.course.title,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            color: ContentLibraryPage._titleColor,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Browse videos and documents for this course.',
+                          style: TextStyle(
+                            color: ContentLibraryPage._mutedColor,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Videos'),
+                Tab(text: 'Documents'),
+              ],
+              labelColor: ContentLibraryPage._buttonBlue,
+              unselectedLabelColor: ContentLibraryPage._mutedColor,
+              indicatorColor: ContentLibraryPage._buttonBlue,
+            ),
+            Expanded(
+              child: FutureBuilder<Map<String, List<_LibraryCardData>>>(
+                future: _contentFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (snapshot.hasError) {
+                    return const Center(child: Text('Error loading content'));
+                  }
+
+                  final videos = snapshot.data?['videos'] ?? [];
+                  final documents = snapshot.data?['documents'] ?? [];
+
+                  return TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildContentList(videos, isVideo: true),
+                      _buildContentList(documents, isVideo: false),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContentList(List<_LibraryCardData> items, {required bool isVideo}) {
+    if (items.isEmpty) {
+      return Center(
+        child: Text(
+          'No ${isVideo ? 'videos' : 'documents'} available.',
+          style: const TextStyle(color: ContentLibraryPage._mutedColor),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(24),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 1.2,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return GestureDetector(
+          onTap: () {
+            if (isVideo) {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ContentDetailPage(
+                    course: widget.course,
+                    currentVideoId: item.id,
+                  ),
+                ),
+              );
+            } else if (item.downloadUrl != null) {
+              _launchUrl(item.downloadUrl!);
+            }
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: ContentLibraryPage._borderColor),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0D0F172A),
+                  blurRadius: 12,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Thumbnail
+                Container(
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: item.thumbnailColor,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: item.thumbnailUrl != null
+                      ? ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                          ),
+                          child: Image.network(
+                            item.thumbnailUrl!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: 80,
+                          ),
+                        )
+                      : Icon(
+                          isVideo ? Icons.play_circle_outline : Icons.description_outlined,
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                ),
+                // Content
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: ContentLibraryPage._titleColor,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.subtitle,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: ContentLibraryPage._mutedColor,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Spacer(),
+                        Align(
+                          alignment: Alignment.bottomRight,
+                          child: Icon(
+                            isVideo ? Icons.play_arrow : Icons.download,
+                            size: 20,
+                            color: ContentLibraryPage._buttonBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _launchUrl(String url) async {
+    try {
+      await launchUrl(Uri.parse(url));
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+    }
+  }
+}
+
 class _BreakawayFolderContent extends StatefulWidget {
   const _BreakawayFolderContent({required this.folder, this.isAdmin = false});
 
@@ -37469,11 +37973,9 @@ class _BreakawayFolderContentState extends State<_BreakawayFolderContent> {
             List<_LibraryCardData> siblings) {
           Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (detailContext) => ContentDetailPage(
+              builder: (detailContext) => _BreakawayCourseDetailPage(
                 course: course,
-                relatedCourses: siblings,
-                onDownloadRequested: (selected) =>
-                    _attemptLibraryCourseDownload(detailContext, selected),
+                isAdmin: widget.isAdmin,
               ),
             ),
           );
