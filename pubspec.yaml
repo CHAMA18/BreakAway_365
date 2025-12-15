@@ -22,7 +22,7 @@ dependencies:
   url_launcher: ^6.3.0
   cloud_firestore: any
   firebase_auth: any
-  firebase_core: any
+  firebase_core: ^4.3.0
   fl_chart: 0.68.0
   flutter:
     sdk: flutter

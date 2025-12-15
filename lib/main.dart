@@ -6421,14 +6421,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   void _handleUploadContentSubmit() {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Upload course functionality coming soon.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+    // Just close the modal - the upload success/error message is shown by _handleUploadWithFiles
     _closeUploadContentModal();
   }
 
@@ -21415,6 +21408,7 @@ class _RecommendedContentCardState extends State<_RecommendedContentCard> {
           course: item,
           relatedCourses: const [],
           onDownloadRequested: null,
+          isAdmin: false, // Member dashboard context
         ),
       ),
     );
@@ -32281,6 +32275,20 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
   int _blueprintEffectivenessRating = 0;
   String _blueprintMostValuableApplication = '';
 
+  // Right People Right Seats specific fields
+  final List<_RightPeopleRightSeatsEntry> _rightPeopleEntries = [
+    _RightPeopleRightSeatsEntry()
+  ];
+  String _requirementDevelopmentPriorities = '';
+
+  // Guiding GeniusTime specific fields
+  final List<_GeniusTimeEntry> _geniusTimeEntries = [_GeniusTimeEntry()];
+  double _geniusTimeMonthlyAverage = 0;
+  double _geniusTimeTargetPercent = 0;
+  double _geniusTimeActualPercent = 0;
+  String _geniusActivitiesIdentified = '';
+  String _geniusTimeStrategies = '';
+
   @override
   void initState() {
     super.initState();
@@ -32603,6 +32611,46 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
                 _blueprintMostValuableApplication.isNotEmpty
                     ? _blueprintMostValuableApplication
                     : null,
+            'submitted_at': FieldValue.serverTimestamp(),
+            'status': 'submitted',
+          };
+        } else if (widget.metricTitle == 'Right People Right Seats') {
+          // Handle Right People Right Seats form
+          data = {
+            'user_ref': userRef,
+            'user_email': user.email,
+            'metric_title': widget.metricTitle,
+            'team_members':
+                _rightPeopleEntries.map((e) => e.toMap()).toList(),
+            'genius_activities_identified':
+                _geniusActivitiesIdentified.isNotEmpty
+                    ? _geniusActivitiesIdentified
+                    : null,
+            'requirement_development_priorities':
+                _requirementDevelopmentPriorities.isNotEmpty
+                    ? _requirementDevelopmentPriorities
+                    : null,
+            'submitted_at': FieldValue.serverTimestamp(),
+            'status': 'submitted',
+          };
+        } else if (widget.metricTitle == 'Guiding GeniusTime') {
+          // Handle Guiding GeniusTime form
+          data = {
+            'user_ref': userRef,
+            'user_email': user.email,
+            'metric_title': widget.metricTitle,
+            'weekly_entries':
+                _geniusTimeEntries.map((e) => e.toMap()).toList(),
+            'monthly_average_hours_per_week': _geniusTimeMonthlyAverage,
+            'target_percent': _geniusTimeTargetPercent,
+            'actual_percent': _geniusTimeActualPercent,
+            'genius_activities_identified':
+                _geniusActivitiesIdentified.isNotEmpty
+                    ? _geniusActivitiesIdentified
+                    : null,
+            'strategies_to_increase': _geniusTimeStrategies.isNotEmpty
+                ? _geniusTimeStrategies
+                : null,
             'submitted_at': FieldValue.serverTimestamp(),
             'status': 'submitted',
           };
@@ -33031,6 +33079,16 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
       return _buildBlueprintUtilizationForm(maxWidth, padding);
     }
 
+    // Use specialized form for Right People Right Seats
+    if (widget.metricTitle == 'Right People Right Seats') {
+      return _buildRightPeopleRightSeatsForm(maxWidth, padding);
+    }
+
+    // Use specialized form for Guiding GeniusTime
+    if (widget.metricTitle == 'Guiding GeniusTime') {
+      return _buildGuidingGeniusTimeForm(maxWidth, padding);
+    }
+
     return Container(
       width: double.infinity,
       padding: padding,
@@ -33317,6 +33375,1175 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  // Right People Right Seats specialized form
+  Widget _buildRightPeopleRightSeatsForm(double maxWidth, EdgeInsets padding) {
+    final bool isMobile = maxWidth < 720;
+
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: const Border.fromBorderSide(
+            BorderSide(color: ScorecardPage._borderColor)),
+        boxShadow: const [
+          BoxShadow(
+              color: _cardShadowColor, blurRadius: 12, offset: Offset(0, 6)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Description
+          const Text(
+            'Evaluating team alignment, roles and responsibilities',
+            style: TextStyle(color: ScorecardPage._mutedColor, fontSize: 14),
+          ),
+          const SizedBox(height: 20),
+          // Header row with column labels for desktop/tablet
+          if (!isMobile) _buildRightPeopleTableHeader(),
+          // Team member entries
+          ..._rightPeopleEntries.asMap().entries.map((entry) =>
+              _buildRightPeopleEntryRow(entry.key, entry.value, isMobile)),
+          const SizedBox(height: 16),
+          // Add row button
+          TextButton.icon(
+            onPressed: () {
+              setState(() {
+                _rightPeopleEntries.add(_RightPeopleRightSeatsEntry());
+              });
+            },
+            icon: const Icon(Icons.add_circle_outline,
+                color: ScorecardPage._buttonBlue, size: 20),
+            label: const Text(
+              'Add Team Member',
+              style: TextStyle(
+                  color: ScorecardPage._buttonBlue, fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Genius Activities Identified
+          _smallLabeled(
+            label: 'Genius Activities Identified:',
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(16),
+                border: const Border.fromBorderSide(
+                    BorderSide(color: ScorecardPage._borderColor)),
+              ),
+              child: TextFormField(
+                minLines: 3,
+                maxLines: 6,
+                initialValue: _geniusActivitiesIdentified,
+                decoration: const InputDecoration(
+                  hintText: 'none',
+                  border: InputBorder.none,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  hintStyle: TextStyle(color: ScorecardPage._mutedColor),
+                ),
+                style: const TextStyle(color: ScorecardPage._titleColor),
+                onChanged: (v) => _geniusActivitiesIdentified = v,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Requirement/Development Priorities
+          _smallLabeled(
+            label: 'Requirement/Development Priorities:',
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(16),
+                border: const Border.fromBorderSide(
+                    BorderSide(color: ScorecardPage._borderColor)),
+              ),
+              child: TextFormField(
+                minLines: 3,
+                maxLines: 6,
+                initialValue: _requirementDevelopmentPriorities,
+                decoration: const InputDecoration(
+                  hintText: 'none',
+                  border: InputBorder.none,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  hintStyle: TextStyle(color: ScorecardPage._mutedColor),
+                ),
+                style: const TextStyle(color: ScorecardPage._titleColor),
+                onChanged: (v) => _requirementDevelopmentPriorities = v,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Guiding GeniusTime specialized form
+  Widget _buildGuidingGeniusTimeForm(double maxWidth, EdgeInsets padding) {
+    final bool isMobile = maxWidth < 720;
+
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: const Border.fromBorderSide(
+            BorderSide(color: ScorecardPage._borderColor)),
+        boxShadow: const [
+          BoxShadow(
+              color: _cardShadowColor, blurRadius: 12, offset: Offset(0, 6)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row with column labels for desktop/tablet
+          if (!isMobile) _buildGeniusTimeTableHeader(),
+          // Weekly entries
+          ..._geniusTimeEntries.asMap().entries.map((entry) =>
+              _buildGeniusTimeEntryRow(entry.key, entry.value, isMobile)),
+          const SizedBox(height: 16),
+          // Add row button
+          TextButton.icon(
+            onPressed: () {
+              setState(() {
+                final newEntry = _GeniusTimeEntry();
+                newEntry.week = _geniusTimeEntries.length + 1;
+                _geniusTimeEntries.add(newEntry);
+              });
+            },
+            icon: const Icon(Icons.add_circle_outline,
+                color: ScorecardPage._buttonBlue, size: 20),
+            label: const Text(
+              'Add Week',
+              style: TextStyle(
+                  color: ScorecardPage._buttonBlue, fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Monthly Average, Target %, Actual % row
+          _buildGeniusTimeSummaryRow(isMobile),
+          const SizedBox(height: 24),
+          // Genius Activities Identified
+          _smallLabeled(
+            label: 'Genius Activities Identified:',
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(16),
+                border: const Border.fromBorderSide(
+                    BorderSide(color: ScorecardPage._borderColor)),
+              ),
+              child: TextFormField(
+                minLines: 3,
+                maxLines: 6,
+                initialValue: _geniusActivitiesIdentified,
+                decoration: const InputDecoration(
+                  hintText: 'none',
+                  border: InputBorder.none,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  hintStyle: TextStyle(color: ScorecardPage._mutedColor),
+                ),
+                style: const TextStyle(color: ScorecardPage._titleColor),
+                onChanged: (v) => _geniusActivitiesIdentified = v,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Strategies to Increase GeniusTime
+          _smallLabeled(
+            label: 'Strategies to IncreaseGeniusTime:',
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(16),
+                border: const Border.fromBorderSide(
+                    BorderSide(color: ScorecardPage._borderColor)),
+              ),
+              child: TextFormField(
+                minLines: 3,
+                maxLines: 6,
+                initialValue: _geniusTimeStrategies,
+                decoration: const InputDecoration(
+                  hintText: 'none',
+                  border: InputBorder.none,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  hintStyle: TextStyle(color: ScorecardPage._mutedColor),
+                ),
+                style: const TextStyle(color: ScorecardPage._titleColor),
+                onChanged: (v) => _geniusTimeStrategies = v,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeniusTimeTableHeader() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFF8FAFC),
+            const Color(0xFFF1F5F9),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: const [
+          Expanded(
+            flex: 12,
+            child: Text(
+              'Week',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 18,
+            child: Text(
+              'Goal (hours)',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 18,
+            child: Text(
+              'Actual Hours',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 18,
+            child: Text(
+              '% of Work Time',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 20,
+            child: Text(
+              'Energy Level (1-10)',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeniusTimeEntryRow(
+      int index, _GeniusTimeEntry entry, bool isMobile) {
+    if (isMobile) {
+      // Mobile: Stack fields vertically
+      return Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Week ${entry.week}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+                if (_geniusTimeEntries.length > 1)
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _geniusTimeEntries.removeAt(index);
+                        // Re-number weeks
+                        for (int i = 0; i < _geniusTimeEntries.length; i++) {
+                          _geniusTimeEntries[i].week = i + 1;
+                        }
+                      });
+                    },
+                    icon: const Icon(Icons.close, color: Colors.red, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _geniusTimeMobileField(
+              label: 'Goal (hours)',
+              hintText: '0',
+              value: entry.goalHours.toString(),
+              onChanged: (v) => entry.goalHours = double.tryParse(v) ?? 0,
+              isNumeric: true,
+            ),
+            const SizedBox(height: 12),
+            _geniusTimeMobileField(
+              label: 'Actual Hours',
+              hintText: '0',
+              value: entry.actualHours.toString(),
+              onChanged: (v) => entry.actualHours = double.tryParse(v) ?? 0,
+              isNumeric: true,
+            ),
+            const SizedBox(height: 12),
+            _geniusTimeMobileField(
+              label: '% of Work Time',
+              hintText: '0',
+              value: entry.percentOfWorkTime.toString(),
+              onChanged: (v) =>
+                  entry.percentOfWorkTime = double.tryParse(v) ?? 0,
+              isNumeric: true,
+            ),
+            const SizedBox(height: 12),
+            _geniusTimeMobileField(
+              label: 'Energy Level (1-10)',
+              hintText: '0',
+              value: entry.energyLevel.toString(),
+              onChanged: (v) => entry.energyLevel = int.tryParse(v) ?? 0,
+              isNumeric: true,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Desktop/Tablet: Horizontal row
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 12,
+            child: _geniusTimeCompactField(
+              hintText: entry.week.toString(),
+              value: entry.week.toString(),
+              onChanged: (v) => entry.week = int.tryParse(v) ?? entry.week,
+              isNumeric: true,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 18,
+            child: _geniusTimeCompactField(
+              hintText: '0',
+              value: entry.goalHours == 0 ? '' : entry.goalHours.toString(),
+              onChanged: (v) => entry.goalHours = double.tryParse(v) ?? 0,
+              isNumeric: true,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 18,
+            child: _geniusTimeCompactField(
+              hintText: '0',
+              value: entry.actualHours == 0 ? '' : entry.actualHours.toString(),
+              onChanged: (v) => entry.actualHours = double.tryParse(v) ?? 0,
+              isNumeric: true,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 18,
+            child: _geniusTimeCompactField(
+              hintText: '0',
+              value: entry.percentOfWorkTime == 0
+                  ? ''
+                  : entry.percentOfWorkTime.toString(),
+              onChanged: (v) =>
+                  entry.percentOfWorkTime = double.tryParse(v) ?? 0,
+              isNumeric: true,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 20,
+            child: _geniusTimeCompactField(
+              hintText: '0',
+              value: entry.energyLevel == 0 ? '' : entry.energyLevel.toString(),
+              onChanged: (v) => entry.energyLevel = int.tryParse(v) ?? 0,
+              isNumeric: true,
+            ),
+          ),
+          if (_geniusTimeEntries.length > 1)
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _geniusTimeEntries.removeAt(index);
+                  // Re-number weeks
+                  for (int i = 0; i < _geniusTimeEntries.length; i++) {
+                    _geniusTimeEntries[i].week = i + 1;
+                  }
+                });
+              },
+              icon: const Icon(Icons.close, color: Colors.red, size: 18),
+              padding: const EdgeInsets.only(left: 8),
+              constraints: const BoxConstraints(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _geniusTimeCompactField({
+    required String hintText,
+    required String value,
+    required ValueChanged<String> onChanged,
+    bool isNumeric = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: TextFormField(
+        initialValue: value.isEmpty || value == '0' || value == '0.0' ? '' : value,
+        keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
+        decoration: InputDecoration(
+          hintText: hintText,
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          hintStyle: const TextStyle(color: ScorecardPage._mutedColor),
+        ),
+        style: const TextStyle(color: ScorecardPage._titleColor, fontSize: 14),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _geniusTimeMobileField({
+    required String label,
+    required String hintText,
+    required String value,
+    required ValueChanged<String> onChanged,
+    bool isNumeric = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            color: Color(0xFF475569),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: TextFormField(
+            initialValue:
+                value.isEmpty || value == '0' || value == '0.0' ? '' : value,
+            keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
+            decoration: InputDecoration(
+              hintText: hintText,
+              border: InputBorder.none,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              hintStyle: const TextStyle(color: ScorecardPage._mutedColor),
+            ),
+            style:
+                const TextStyle(color: ScorecardPage._titleColor, fontSize: 14),
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGeniusTimeSummaryRow(bool isMobile) {
+    final List<double> monthlyAverageOptions = [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      15,
+      20,
+      25,
+      30
+    ];
+    final List<double> percentOptions = [
+      0,
+      5,
+      10,
+      15,
+      20,
+      25,
+      30,
+      35,
+      40,
+      45,
+      50,
+      55,
+      60,
+      65,
+      70,
+      75,
+      80,
+      85,
+      90,
+      95,
+      100
+    ];
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildGeniusTimeDropdownField(
+            label: 'Monthly Average:',
+            value: _geniusTimeMonthlyAverage,
+            options: monthlyAverageOptions,
+            suffix: 'hours/week',
+            onChanged: (v) =>
+                setState(() => _geniusTimeMonthlyAverage = v ?? 0),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildGeniusTimeDropdownField(
+                  label: 'Target %:',
+                  value: _geniusTimeTargetPercent,
+                  options: percentOptions,
+                  suffix: '%',
+                  onChanged: (v) =>
+                      setState(() => _geniusTimeTargetPercent = v ?? 0),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildGeniusTimeDropdownField(
+                  label: 'Actual %:',
+                  value: _geniusTimeActualPercent,
+                  options: percentOptions,
+                  suffix: '%',
+                  onChanged: (v) =>
+                      setState(() => _geniusTimeActualPercent = v ?? 0),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        const Text(
+          'Monthly Average:',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            color: Color(0xFF475569),
+          ),
+        ),
+        const SizedBox(width: 12),
+        _buildCompactDropdown(
+          value: _geniusTimeMonthlyAverage,
+          options: monthlyAverageOptions,
+          onChanged: (v) => setState(() => _geniusTimeMonthlyAverage = v ?? 0),
+        ),
+        const SizedBox(width: 8),
+        const Text(
+          'hours/week',
+          style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+        ),
+        const Spacer(),
+        const Text(
+          'Target %:',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            color: Color(0xFF475569),
+          ),
+        ),
+        const SizedBox(width: 12),
+        _buildCompactDropdown(
+          value: _geniusTimeTargetPercent,
+          options: percentOptions,
+          onChanged: (v) => setState(() => _geniusTimeTargetPercent = v ?? 0),
+        ),
+        const SizedBox(width: 8),
+        const Text(
+          '%',
+          style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+        ),
+        const SizedBox(width: 24),
+        const Text(
+          'Actual %:',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            color: Color(0xFF475569),
+          ),
+        ),
+        const SizedBox(width: 12),
+        _buildCompactDropdown(
+          value: _geniusTimeActualPercent,
+          options: percentOptions,
+          onChanged: (v) => setState(() => _geniusTimeActualPercent = v ?? 0),
+        ),
+        const SizedBox(width: 8),
+        const Text(
+          '%',
+          style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactDropdown({
+    required double value,
+    required List<double> options,
+    required ValueChanged<double?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: DropdownButton<double>(
+        value: options.contains(value) ? value : options.first,
+        underline: const SizedBox.shrink(),
+        isDense: true,
+        style: const TextStyle(
+          fontSize: 14,
+          color: ScorecardPage._titleColor,
+        ),
+        items: options
+            .map((opt) => DropdownMenuItem<double>(
+                  value: opt,
+                  child: Text(opt % 1 == 0 ? opt.toInt().toString() : opt.toString()),
+                ))
+            .toList(),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildGeniusTimeDropdownField({
+    required String label,
+    required double value,
+    required List<double> options,
+    required String suffix,
+    required ValueChanged<double?> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            color: Color(0xFF475569),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: DropdownButton<double>(
+                value: options.contains(value) ? value : options.first,
+                underline: const SizedBox.shrink(),
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: ScorecardPage._titleColor,
+                ),
+                items: options
+                    .map((opt) => DropdownMenuItem<double>(
+                          value: opt,
+                          child: Text(opt % 1 == 0
+                              ? opt.toInt().toString()
+                              : opt.toString()),
+                        ))
+                    .toList(),
+                onChanged: onChanged,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              suffix,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRightPeopleTableHeader() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFF8FAFC),
+            const Color(0xFFF1F5F9),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: const [
+          Expanded(
+            flex: 20,
+            child: Text(
+              'Team Member',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 20,
+            child: Text(
+              'Current Role',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 15,
+            child: Text(
+              'Right Person?',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 15,
+            child: Text(
+              'Right Seat?',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 20,
+            child: Text(
+              'Action Needed',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRightPeopleEntryRow(
+      int index, _RightPeopleRightSeatsEntry entry, bool isMobile) {
+    if (isMobile) {
+      // Mobile: Stack fields vertically
+      return Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Team Member ${index + 1}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+                if (_rightPeopleEntries.length > 1)
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _rightPeopleEntries.removeAt(index);
+                      });
+                    },
+                    icon: const Icon(Icons.close, color: Colors.red, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _rightPeopleMobileField(
+              label: 'Team Member',
+              icon: Icons.person_outline,
+              hintText: 'none',
+              value: entry.teamMember,
+              onChanged: (v) => entry.teamMember = v,
+            ),
+            const SizedBox(height: 12),
+            _rightPeopleMobileField(
+              label: 'Current Role',
+              icon: Icons.work_outline,
+              hintText: 'none',
+              value: entry.currentRole,
+              onChanged: (v) => entry.currentRole = v,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _rightPeopleCheckboxField(
+                    label: 'Right Person?',
+                    value: entry.rightPerson,
+                    onChanged: (v) {
+                      setState(() {
+                        entry.rightPerson = v ?? false;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _rightPeopleCheckboxField(
+                    label: 'Right Seat?',
+                    value: entry.rightSeat,
+                    onChanged: (v) {
+                      setState(() {
+                        entry.rightSeat = v ?? false;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _rightPeopleMobileField(
+              label: 'Action Needed',
+              icon: Icons.task_alt_outlined,
+              hintText: 'none',
+              value: entry.actionNeeded,
+              onChanged: (v) => entry.actionNeeded = v,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Desktop/Tablet: Horizontal row
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 20,
+            child: _rightPeopleCompactField(
+              hintText: 'none',
+              value: entry.teamMember,
+              onChanged: (v) => entry.teamMember = v,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 20,
+            child: _rightPeopleCompactField(
+              hintText: 'none',
+              value: entry.currentRole,
+              onChanged: (v) => entry.currentRole = v,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 15,
+            child: _rightPeopleCheckboxCompact(
+              value: entry.rightPerson,
+              onChanged: (v) {
+                setState(() {
+                  entry.rightPerson = v ?? false;
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 15,
+            child: _rightPeopleCheckboxCompact(
+              value: entry.rightSeat,
+              onChanged: (v) {
+                setState(() {
+                  entry.rightSeat = v ?? false;
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 20,
+            child: _rightPeopleCompactField(
+              hintText: 'none',
+              value: entry.actionNeeded,
+              onChanged: (v) => entry.actionNeeded = v,
+            ),
+          ),
+          if (_rightPeopleEntries.length > 1)
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _rightPeopleEntries.removeAt(index);
+                });
+              },
+              icon: const Icon(Icons.close, color: Colors.red, size: 20),
+              padding: const EdgeInsets.only(left: 8),
+              constraints: const BoxConstraints(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rightPeopleMobileField({
+    required String label,
+    required IconData icon,
+    required String hintText,
+    required String value,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF6B7280)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: TextFormField(
+            initialValue: value,
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+              hintText: hintText,
+              hintStyle: const TextStyle(color: ScorecardPage._mutedColor),
+            ),
+            style: const TextStyle(
+              color: ScorecardPage._titleColor,
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+            ),
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _rightPeopleCheckboxField({
+    required String label,
+    required bool value,
+    required ValueChanged<bool?> onChanged,
+  }) {
+    return Row(
+      children: [
+        Checkbox(
+          value: value,
+          onChanged: onChanged,
+          activeColor: ScorecardPage._buttonBlue,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: ScorecardPage._titleColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _rightPeopleCompactField({
+    required String hintText,
+    required String value,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: TextFormField(
+        initialValue: value,
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+          hintText: hintText,
+          hintStyle: const TextStyle(color: ScorecardPage._mutedColor, fontSize: 14),
+        ),
+        style: const TextStyle(
+          color: ScorecardPage._titleColor,
+          fontSize: 14,
+        ),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _rightPeopleCheckboxCompact({
+    required bool value,
+    required ValueChanged<bool?> onChanged,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 20,
+          height: 20,
+          child: Checkbox(
+            value: value,
+            onChanged: onChanged,
+            activeColor: ScorecardPage._buttonBlue,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          value ? 'Yes' : 'No',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: value ? ScorecardPage._buttonBlue : ScorecardPage._mutedColor,
+          ),
+        ),
+      ],
     );
   }
 
@@ -36279,6 +37506,38 @@ class _DelegationEntry {
       };
 }
 
+class _RightPeopleRightSeatsEntry {
+  String teamMember = '';
+  String currentRole = '';
+  bool rightPerson = false;
+  bool rightSeat = false;
+  String actionNeeded = '';
+
+  Map<String, dynamic> toMap() => {
+        'teamMember': teamMember,
+        'currentRole': currentRole,
+        'rightPerson': rightPerson,
+        'rightSeat': rightSeat,
+        'actionNeeded': actionNeeded,
+      };
+}
+
+class _GeniusTimeEntry {
+  int week = 1;
+  double goalHours = 0;
+  double actualHours = 0;
+  double percentOfWorkTime = 0;
+  int energyLevel = 0;
+
+  Map<String, dynamic> toMap() => {
+        'week': week,
+        'goalHours': goalHours,
+        'actualHours': actualHours,
+        'percentOfWorkTime': percentOfWorkTime,
+        'energyLevel': energyLevel,
+      };
+}
+
 // Small pill used in the hero to show quick context chips
 class _MetricPill extends StatelessWidget {
   const _MetricPill({required this.label, required this.icon});
@@ -36817,6 +38076,7 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
               siblings.where((item) => item.id != course.id).toList(),
           onDownloadRequested: (selected) =>
               _attemptLibraryCourseDownload(detailContext, selected),
+          isAdmin: widget.isAdmin,
         ),
       ),
     );
@@ -37703,6 +38963,7 @@ class _ImmersiveFootageViewState extends State<_ImmersiveFootageView> {
                       onDownloadRequested: (selected) =>
                           _attemptLibraryCourseDownload(
                               detailContext, selected),
+                      isAdmin: widget.isAdmin,
                     ),
                   ),
                 );
@@ -38184,6 +39445,7 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
               builder: (_) => ContentDetailPage(
                 course: widget.course,
                 currentVideoId: item.id,
+                isAdmin: widget.isAdmin,
               ),
             ),
           );
@@ -39641,6 +40903,7 @@ class _FavoritesView extends StatelessWidget {
                             builder: (ctx) => ContentDetailPage(
                               course: course,
                               relatedCourses: siblings,
+                              isAdmin: isAdmin,
                             ),
                           ),
                         );
@@ -40510,6 +41773,7 @@ class ContentDetailPage extends StatefulWidget {
     this.onNavigate,
     this.originalCourseId,
     this.currentVideoId,
+    this.isAdmin = false,
   });
 
   final _LibraryCardData course;
@@ -40520,6 +41784,7 @@ class ContentDetailPage extends StatefulWidget {
       originalCourseId; // Original course ID when viewing a module video
   final String?
       currentVideoId; // ID of the currently playing video for highlighting
+  final bool isAdmin;
 
   @override
   State<ContentDetailPage> createState() => _ContentDetailPageState();
@@ -40530,11 +41795,54 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   late _LibraryCardData _currentCourse;
   String? _currentVideoId;
 
+  // Admin user info for sidebar (only used when isAdmin is true)
+  String _adminDisplayName = '';
+  String _adminRoleLabel = 'Admin';
+  String? _adminProfileImageUrl;
+
   @override
   void initState() {
     super.initState();
     _currentCourse = widget.course;
     _currentVideoId = widget.currentVideoId ?? widget.course.id;
+    if (widget.isAdmin) {
+      _loadAdminUserInfo();
+    }
+  }
+
+  Future<void> _loadAdminUserInfo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (!mounted) return;
+      final data = doc.data();
+      if (data != null) {
+        final firstName = data['firstName'] as String? ?? '';
+        final lastName = data['lastName'] as String? ?? '';
+        final displayName = data['display_name'] as String? ??
+            data['displayName'] as String? ??
+            data['username'] as String? ??
+            '';
+        final role = data['role'] as String? ?? 'Admin';
+        setState(() {
+          _adminDisplayName = displayName.isNotEmpty
+              ? displayName
+              : '$firstName $lastName'.trim();
+          if (_adminDisplayName.isEmpty) {
+            _adminDisplayName = user.email ?? 'Admin';
+          }
+          _adminRoleLabel = role;
+          _adminProfileImageUrl = data['profileImageUrl'] as String? ??
+              data['photoURL'] as String?;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading admin user info: $e');
+    }
   }
 
   // Callback to update the video when a module is clicked
@@ -40636,13 +41944,35 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     final media = MediaQuery.of(context);
     final double minHeight =
         math.max(0, media.size.height - media.padding.vertical - 80);
+    // Show sidebar on wide screens: admin sidebar for admins, member sidebar for members
     final bool showSidebar = media.size.width >= 1024;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
       body: Row(
         children: [
-          if (showSidebar)
+          if (showSidebar && widget.isAdmin)
+            _AdminSidebar(
+              displayName: _adminDisplayName,
+              roleLabel: _adminRoleLabel,
+              profileImageUrl: _adminProfileImageUrl,
+              selectedSection: AdminSection.contentLibrary,
+              onSectionSelected: (section) {
+                // Navigate back to admin dashboard and switch to selected section
+                Navigator.of(context).pop();
+              },
+              onLogout: () async {
+                await FirebaseAuth.instance.signOut();
+                if (context.mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute<void>(
+                        builder: (_) => const AuthLandingPage()),
+                    (route) => false,
+                  );
+                }
+              },
+            )
+          else if (showSidebar && !widget.isAdmin)
             SizedBox(
               width: 280,
               child: _SideNavigation(
@@ -40796,7 +42126,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                                   widget.originalCourseId ?? widget.course.id,
                               courseData: originalCourse.originalData,
                               currentVideoId: _currentVideoId,
-                              onModuleTap: _updateVideoFromModule);
+                              onModuleTap: _updateVideoFromModule,
+                              isAdmin: widget.isAdmin);
 
                           if (isCompact) {
                             return Column(
@@ -40909,6 +42240,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
             ..add(widget.course),
           onDownloadRequested: widget.onDownloadRequested,
           onNavigate: widget.onNavigate,
+          isAdmin: widget.isAdmin,
         ),
       ),
     );
@@ -41273,6 +42605,7 @@ class _ModulesPanel extends StatefulWidget {
     this.courseData,
     this.currentVideoId,
     this.onModuleTap,
+    this.isAdmin = false,
   });
 
   final List<_CourseModuleInfo> modules;
@@ -41282,6 +42615,7 @@ class _ModulesPanel extends StatefulWidget {
       currentVideoId; // ID of the currently playing video for highlighting
   final ValueChanged<_CourseModuleInfo>?
       onModuleTap; // Callback to update video in parent
+  final bool isAdmin;
 
   @override
   State<_ModulesPanel> createState() => _ModulesPanelState();
@@ -41650,6 +42984,7 @@ class _ModulesPanelState extends State<_ModulesPanel> {
               originalCourseId: originalCourseId, // Pass original course ID
               currentVideoId:
                   cardData.id, // Pass current video ID for highlighting
+              isAdmin: widget.isAdmin,
             ),
           ),
         );
@@ -48655,6 +49990,18 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
   bool _isSaving = false;
   bool _isLoading = true;
 
+  // General settings
+  bool _isLoadingGeneral = true;
+  bool _isSavingGeneral = false;
+  final TextEditingController _platformNameController = TextEditingController();
+  final TextEditingController _supportEmailController = TextEditingController();
+  bool _allowSelfRegistration = true;
+  String _defaultUserRole = 'Member';
+  bool _autoPlayVideos = true;
+  int _sessionTimeoutMinutes = 60;
+  bool _maintenanceMode = false;
+  bool _requireEmailVerification = false;
+
   static const List<Map<String, String>> _bgColorOptions = [
     {'name': 'Blue', 'value': '#1E40AF'},
     {'name': 'Purple', 'value': '#7C3AED'},
@@ -48677,12 +50024,97 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
   void initState() {
     super.initState();
     _loadSettings();
+    _loadGeneralSettings();
   }
 
   @override
   void dispose() {
     _announcementTextController.dispose();
+    _platformNameController.dispose();
+    _supportEmailController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadGeneralSettings() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('app_settings')
+          .doc('general')
+          .get();
+
+      if (doc.exists && mounted) {
+        final data = doc.data()!;
+        setState(() {
+          _platformNameController.text = data['platformName'] as String? ?? 'Breakaway365';
+          _supportEmailController.text = data['supportEmail'] as String? ?? '';
+          _allowSelfRegistration = data['allowSelfRegistration'] as bool? ?? true;
+          _defaultUserRole = data['defaultUserRole'] as String? ?? 'Member';
+          _autoPlayVideos = data['autoPlayVideos'] as bool? ?? true;
+          _sessionTimeoutMinutes = data['sessionTimeoutMinutes'] as int? ?? 60;
+          _maintenanceMode = data['maintenanceMode'] as bool? ?? false;
+          _requireEmailVerification = data['requireEmailVerification'] as bool? ?? false;
+          _isLoadingGeneral = false;
+        });
+      } else {
+        setState(() {
+          _platformNameController.text = 'Breakaway365';
+          _isLoadingGeneral = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading general settings: $e');
+      if (mounted) setState(() => _isLoadingGeneral = false);
+    }
+  }
+
+  Future<void> _saveGeneralSettings() async {
+    setState(() => _isSavingGeneral = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('app_settings')
+          .doc('general')
+          .set({
+        'platformName': _platformNameController.text.trim(),
+        'supportEmail': _supportEmailController.text.trim(),
+        'allowSelfRegistration': _allowSelfRegistration,
+        'defaultUserRole': _defaultUserRole,
+        'autoPlayVideos': _autoPlayVideos,
+        'sessionTimeoutMinutes': _sessionTimeoutMinutes,
+        'maintenanceMode': _maintenanceMode,
+        'requireEmailVerification': _requireEmailVerification,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': FirebaseAuth.instance.currentUser?.uid,
+      }, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 12),
+                Text('General settings saved successfully!'),
+              ],
+            ),
+            backgroundColor: AdminSystemSettingsPage._successGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error saving general settings: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save settings: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingGeneral = false);
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -49522,39 +50954,849 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
   }
 
   Widget _buildGeneralContent() {
+    if (_isLoadingGeneral) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(48),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Platform Info Card
+        _buildPlatformInfoCard(),
+        const SizedBox(height: 24),
+        // User Registration Card
+        _buildUserRegistrationCard(),
+        const SizedBox(height: 24),
+        // Content Settings Card
+        _buildContentSettingsCard(),
+        const SizedBox(height: 24),
+        // System Status Card
+        _buildSystemStatusCard(),
+        const SizedBox(height: 32),
+        // Save Button
+        _buildGeneralSaveButton(),
+      ],
+    );
+  }
+
+  Widget _buildPlatformInfoCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(48),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AdminSystemSettingsPage._borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.construction_rounded,
-            size: 64,
-            color: AdminSystemSettingsPage._mutedColor.withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'General Settings Coming Soon',
-            style: TextStyle(
-              color: AdminSystemSettingsPage._titleColor,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AdminSystemSettingsPage._accentBlue.withValues(alpha: 0.1),
+                        AdminSystemSettingsPage._accentBlue.withValues(alpha: 0.05),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.business_rounded,
+                    color: AdminSystemSettingsPage._accentBlue,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Platform Information',
+                        style: TextStyle(
+                          color: AdminSystemSettingsPage._titleColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Configure basic platform details',
+                        style: TextStyle(
+                          color: AdminSystemSettingsPage._mutedColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Additional system configuration options will be available here.',
-            style: TextStyle(
-              color: AdminSystemSettingsPage._mutedColor,
-              fontSize: 15,
+          const Divider(height: 1, color: AdminSystemSettingsPage._borderColor),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildLabeledTextField(
+                  label: 'Platform Name',
+                  controller: _platformNameController,
+                  hint: 'Enter your platform name',
+                  icon: Icons.badge_outlined,
+                ),
+                const SizedBox(height: 20),
+                _buildLabeledTextField(
+                  label: 'Support Email',
+                  controller: _supportEmailController,
+                  hint: 'support@example.com',
+                  icon: Icons.email_outlined,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUserRegistrationCard() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AdminSystemSettingsPage._borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                        const Color(0xFF8B5CF6).withValues(alpha: 0.05),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.person_add_rounded,
+                    color: Color(0xFF8B5CF6),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'User Registration',
+                        style: TextStyle(
+                          color: AdminSystemSettingsPage._titleColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Control how new users join the platform',
+                        style: TextStyle(
+                          color: AdminSystemSettingsPage._mutedColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AdminSystemSettingsPage._borderColor),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                _buildSettingToggle(
+                  title: 'Allow Self-Registration',
+                  subtitle: _allowSelfRegistration
+                      ? 'Users can create their own accounts'
+                      : 'Only admins can create new accounts',
+                  icon: Icons.how_to_reg_rounded,
+                  value: _allowSelfRegistration,
+                  onChanged: (v) => setState(() => _allowSelfRegistration = v),
+                ),
+                const SizedBox(height: 20),
+                _buildSettingToggle(
+                  title: 'Require Email Verification',
+                  subtitle: _requireEmailVerification
+                      ? 'Users must verify email before accessing content'
+                      : 'Users can access content immediately after signup',
+                  icon: Icons.mark_email_read_rounded,
+                  value: _requireEmailVerification,
+                  onChanged: (v) => setState(() => _requireEmailVerification = v),
+                ),
+                const SizedBox(height: 20),
+                _buildDropdownSetting(
+                  title: 'Default User Role',
+                  subtitle: 'Role assigned to new users',
+                  icon: Icons.security_rounded,
+                  value: _defaultUserRole,
+                  options: const ['Member', 'Coach'],
+                  onChanged: (v) => setState(() => _defaultUserRole = v ?? 'Member'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContentSettingsCard() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AdminSystemSettingsPage._borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF0D9488).withValues(alpha: 0.1),
+                        const Color(0xFF0D9488).withValues(alpha: 0.05),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.play_circle_rounded,
+                    color: Color(0xFF0D9488),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Content Settings',
+                        style: TextStyle(
+                          color: AdminSystemSettingsPage._titleColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Configure content playback and display',
+                        style: TextStyle(
+                          color: AdminSystemSettingsPage._mutedColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AdminSystemSettingsPage._borderColor),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                _buildSettingToggle(
+                  title: 'Auto-Play Videos',
+                  subtitle: _autoPlayVideos
+                      ? 'Videos start playing automatically'
+                      : 'Users must manually start video playback',
+                  icon: Icons.play_arrow_rounded,
+                  value: _autoPlayVideos,
+                  onChanged: (v) => setState(() => _autoPlayVideos = v),
+                ),
+                const SizedBox(height: 20),
+                _buildSliderSetting(
+                  title: 'Session Timeout',
+                  subtitle: 'Inactive users will be logged out after $_sessionTimeoutMinutes minutes',
+                  icon: Icons.timer_rounded,
+                  value: _sessionTimeoutMinutes.toDouble(),
+                  min: 15,
+                  max: 240,
+                  divisions: 15,
+                  label: '$_sessionTimeoutMinutes min',
+                  onChanged: (v) => setState(() => _sessionTimeoutMinutes = v.round()),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSystemStatusCard() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: _maintenanceMode 
+              ? Colors.orange.withValues(alpha: 0.5) 
+              : AdminSystemSettingsPage._borderColor,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        (_maintenanceMode ? Colors.orange : const Color(0xFFEF4444))
+                            .withValues(alpha: 0.1),
+                        (_maintenanceMode ? Colors.orange : const Color(0xFFEF4444))
+                            .withValues(alpha: 0.05),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    _maintenanceMode ? Icons.engineering_rounded : Icons.power_settings_new_rounded,
+                    color: _maintenanceMode ? Colors.orange : const Color(0xFFEF4444),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'System Status',
+                        style: TextStyle(
+                          color: AdminSystemSettingsPage._titleColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Control system availability',
+                        style: TextStyle(
+                          color: AdminSystemSettingsPage._mutedColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _maintenanceMode
+                        ? Colors.orange.withValues(alpha: 0.1)
+                        : AdminSystemSettingsPage._successGreen.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _maintenanceMode
+                              ? Colors.orange
+                              : AdminSystemSettingsPage._successGreen,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _maintenanceMode ? 'Maintenance' : 'Online',
+                        style: TextStyle(
+                          color: _maintenanceMode
+                              ? Colors.orange
+                              : AdminSystemSettingsPage._successGreen,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AdminSystemSettingsPage._borderColor),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: _buildSettingToggle(
+              title: 'Maintenance Mode',
+              subtitle: _maintenanceMode
+                  ? 'Platform is in maintenance mode. Only admins can access.'
+                  : 'Platform is operational and accessible to all users.',
+              icon: Icons.build_circle_rounded,
+              value: _maintenanceMode,
+              onChanged: (v) => setState(() => _maintenanceMode = v),
+              activeColor: Colors.orange,
+            ),
+          ),
+          if (_maintenanceMode)
+            Container(
+              margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'When enabled, only administrators can access the platform. Regular users will see a maintenance message.',
+                      style: TextStyle(
+                        color: Color(0xFF92400E),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLabeledTextField({
+    required String label,
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: AdminSystemSettingsPage._titleColor, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AdminSystemSettingsPage._titleColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              color: AdminSystemSettingsPage._mutedColor.withValues(alpha: 0.6),
+            ),
+            filled: true,
+            fillColor: const Color(0xFFF9FAFB),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AdminSystemSettingsPage._borderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: AdminSystemSettingsPage._accentBlue,
+                width: 1.5,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingToggle({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    Color? activeColor,
+  }) {
+    final effectiveActiveColor = activeColor ?? AdminSystemSettingsPage._successGreen;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: value
+            ? effectiveActiveColor.withValues(alpha: 0.05)
+            : const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: value
+              ? effectiveActiveColor.withValues(alpha: 0.2)
+              : AdminSystemSettingsPage._borderColor,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: value
+                  ? effectiveActiveColor.withValues(alpha: 0.12)
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: value ? effectiveActiveColor : AdminSystemSettingsPage._mutedColor,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AdminSystemSettingsPage._titleColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AdminSystemSettingsPage._mutedColor,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeColor: Colors.white,
+            activeTrackColor: effectiveActiveColor,
+            inactiveThumbColor: const Color(0xFFE5E7EB),
+            inactiveTrackColor: const Color(0xFFF3F4F6),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropdownSetting({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required String value,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AdminSystemSettingsPage._borderColor),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: AdminSystemSettingsPage._mutedColor,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AdminSystemSettingsPage._titleColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AdminSystemSettingsPage._mutedColor,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AdminSystemSettingsPage._borderColor),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: value,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+                style: const TextStyle(
+                  color: AdminSystemSettingsPage._titleColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                items: options.map((opt) => DropdownMenuItem(
+                  value: opt,
+                  child: Text(opt),
+                )).toList(),
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSliderSetting({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required String label,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AdminSystemSettingsPage._borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  color: AdminSystemSettingsPage._mutedColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AdminSystemSettingsPage._titleColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AdminSystemSettingsPage._mutedColor,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AdminSystemSettingsPage._accentBlue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: AdminSystemSettingsPage._accentBlue,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor: AdminSystemSettingsPage._accentBlue,
+              inactiveTrackColor: AdminSystemSettingsPage._borderColor,
+              thumbColor: AdminSystemSettingsPage._accentBlue,
+              overlayColor: AdminSystemSettingsPage._accentBlue.withValues(alpha: 0.1),
+              trackHeight: 6,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+            ),
+            child: Slider(
+              value: value,
+              min: min,
+              max: max,
+              divisions: divisions,
+              onChanged: onChanged,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${min.round()} min',
+                  style: const TextStyle(
+                    color: AdminSystemSettingsPage._mutedColor,
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  '${max.round()} min',
+                  style: const TextStyle(
+                    color: AdminSystemSettingsPage._mutedColor,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeneralSaveButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: ElevatedButton(
+        onPressed: _isSavingGeneral ? null : _saveGeneralSettings,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AdminSystemSettingsPage._accentBlue,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        child: _isSavingGeneral
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.save_rounded, size: 20, color: Colors.white),
+                  SizedBox(width: 10),
+                  Text('Save General Settings'),
+                ],
+              ),
       ),
     );
   }
