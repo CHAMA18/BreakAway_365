@@ -36991,7 +36991,7 @@ class _BreakawayCourseCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Thumbnail
+            // Thumbnail - Always use documentation.png asset
             ClipRRect(
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
@@ -37003,25 +37003,12 @@ class _BreakawayCourseCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: course.thumbnailColor,
                 ),
-                child: course.thumbnailUrl != null
-                    ? Image.network(
-                        course.thumbnailUrl!,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: 120,
-                        errorBuilder: (context, error, stackTrace) => Image.asset(
-                          'assets/images/documentation.png',
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: 120,
-                        ),
-                      )
-                    : Image.asset(
-                        'assets/images/documentation.png',
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: 120,
-                      ),
+                child: Image.asset(
+                  'assets/images/documentation.png',
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                  height: 120,
+                ),
               ),
             ),
             // Content
