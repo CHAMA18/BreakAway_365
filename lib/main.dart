@@ -45975,17 +45975,12 @@ class _AssessmentsPageState extends State<AssessmentsPage> {
   }
 
   List<pw.Widget> _buildGuidingGeniusPdfContent() {
-    final judicious = _getStringValue(_assessmentData['GG_judicious']);
     final strengths = _getStringValue(_assessmentData['GG_strengths']);
     final energizing = _getStringValue(_assessmentData['GG_enegizing']);
 
     return [
       _pdfSectionTitle('Guiding Genius Report'),
       pw.SizedBox(height: 16),
-      if (judicious.isNotEmpty) ...[
-        _pdfLabeledField('Judicious', judicious),
-        pw.SizedBox(height: 12),
-      ],
       if (strengths.isNotEmpty) ...[
         _pdfLabeledField('Strengths', strengths),
         pw.SizedBox(height: 12),
@@ -45993,7 +45988,7 @@ class _AssessmentsPageState extends State<AssessmentsPage> {
       if (energizing.isNotEmpty) ...[
         _pdfLabeledField('Energizing', energizing),
       ],
-      if (judicious.isEmpty && strengths.isEmpty && energizing.isEmpty)
+      if (strengths.isEmpty && energizing.isEmpty)
         pw.Text('No Guiding Genius data available.',
             style: const pw.TextStyle(color: PdfColors.grey)),
     ];
@@ -46343,8 +46338,7 @@ class _AssessmentsPageState extends State<AssessmentsPage> {
           );
         }
 
-        // Get Guiding Genius Time data from new field names (GG_judicious, GG_strengths, GG_enegizing)
-        final ggJudicious = _getStringValue(_assessmentData['GG_judicious']);
+        // Get Guiding Genius Time data from new field names (GG_strengths, GG_enegizing)
         final ggStrengths = _getStringValue(_assessmentData['GG_strengths']);
         final ggEnergizing = _getStringValue(_assessmentData['GG_enegizing']);
 
@@ -46358,21 +46352,6 @@ class _AssessmentsPageState extends State<AssessmentsPage> {
                     onDownload: () =>
                         _downloadResults('Guiding Genius Report')),
                 const SizedBox(height: 20),
-                const Text(
-                  'Judicious',
-                  style: TextStyle(
-                    color: AssessmentsPage._mutedColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  ggJudicious.isEmpty ? 'not yet assessed' : ggJudicious,
-                  style: TextStyle(
-                      color: AssessmentsPage._titleColor, fontSize: 13),
-                ),
-                const SizedBox(height: 16),
                 const Text(
                   'Strengths',
                   style: TextStyle(

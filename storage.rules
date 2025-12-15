@@ -1,0 +1,59 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user owns the path
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Assessment results - authenticated users (admins) can upload and read
+    match /assessment_results/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // User uploads - owner can read/write
+    match /users/{userId}/uploads/{allPaths=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // User profile images - owner can write, anyone authenticated can read
+    match /users/{userId}/profile/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+    
+    // Course content - authenticated users can read
+    match /courses/{courseId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only admins via backend
+    }
+    
+    // Public assets - anyone can read
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if false; // Only admins
+    }
+    
+    // Video uploads - authenticated users (admins) can upload and read
+    match /video/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Document uploads - authenticated users (admins) can upload and read
+    match /document/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Global size limit for uploads
+    allow write: if request.resource.size < 20 * 1024 * 1024 * 1024; // 20GB
+  }
+}

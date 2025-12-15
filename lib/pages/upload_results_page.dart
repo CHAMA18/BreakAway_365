@@ -50,8 +50,7 @@ class _UploadAssessmentResultsPageState extends State<UploadAssessmentResultsPag
   final _wgZoneController = TextEditingController();
   final _wgStrengthsController = TextEditingController();
   
-  // Guiding Genius Time fields - GG_judicious, GG_strengths, GG_energizing
-  final _ggJudiciousController = TextEditingController();
+  // Guiding Genius Time fields - GG_strengths, GG_energizing
   final _ggStrengthsController = TextEditingController();
   final _ggEnergizingController = TextEditingController();
   
@@ -74,7 +73,6 @@ class _UploadAssessmentResultsPageState extends State<UploadAssessmentResultsPag
     _kolbeStrengthsController.dispose();
     _wgZoneController.dispose();
     _wgStrengthsController.dispose();
-    _ggJudiciousController.dispose();
     _ggStrengthsController.dispose();
     _ggEnergizingController.dispose();
     _paDriveController.dispose();
@@ -96,8 +94,7 @@ class _UploadAssessmentResultsPageState extends State<UploadAssessmentResultsPag
         return _wgZoneController.text.isNotEmpty ||
                _wgStrengthsController.text.isNotEmpty;
       case 'Guiding Genius Report':
-        return _ggJudiciousController.text.isNotEmpty ||
-               _ggStrengthsController.text.isNotEmpty ||
+        return _ggStrengthsController.text.isNotEmpty ||
                _ggEnergizingController.text.isNotEmpty;
       case 'Print Assessment':
         return _paDriveController.text.isNotEmpty ||
@@ -123,7 +120,6 @@ class _UploadAssessmentResultsPageState extends State<UploadAssessmentResultsPag
         kolbeStrengthsController: _kolbeStrengthsController,
         wgZoneController: _wgZoneController,
         wgStrengthsController: _wgStrengthsController,
-        ggJudiciousController: _ggJudiciousController,
         ggStrengthsController: _ggStrengthsController,
         ggEnergizingController: _ggEnergizingController,
         paDriveController: _paDriveController,
@@ -282,9 +278,8 @@ class _UploadAssessmentResultsPageState extends State<UploadAssessmentResultsPag
         }
         
         // Add Guiding Genius Time values
-        if (_ggJudiciousController.text.isNotEmpty || _ggStrengthsController.text.isNotEmpty ||
+        if (_ggStrengthsController.text.isNotEmpty ||
             _ggEnergizingController.text.isNotEmpty) {
-          assessmentData['GG_judicious'] = _ggJudiciousController.text.trim();
           assessmentData['GG_strengths'] = _ggStrengthsController.text.trim();
           assessmentData['GG_enegizing'] = _ggEnergizingController.text.trim();
         }
@@ -933,7 +928,6 @@ class _AssessmentValuesDialog extends StatelessWidget {
     required this.kolbeStrengthsController,
     required this.wgZoneController,
     required this.wgStrengthsController,
-    required this.ggJudiciousController,
     required this.ggStrengthsController,
     required this.ggEnergizingController,
     required this.paDriveController,
@@ -951,7 +945,6 @@ class _AssessmentValuesDialog extends StatelessWidget {
   final TextEditingController kolbeStrengthsController;
   final TextEditingController wgZoneController;
   final TextEditingController wgStrengthsController;
-  final TextEditingController ggJudiciousController;
   final TextEditingController ggStrengthsController;
   final TextEditingController ggEnergizingController;
   final TextEditingController paDriveController;
@@ -1099,9 +1092,7 @@ class _AssessmentValuesDialog extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildTextField('Judicious (GG_judicious)', ggJudiciousController, 
-              hint: 'Enter judicious activities'),
-            const SizedBox(height: 16),
+            
             _buildTextField('Strengths (GG_strengths)', ggStrengthsController,
               hint: 'Enter key strengths from the report', maxLines: 3),
             const SizedBox(height: 16),
