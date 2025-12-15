@@ -5094,7 +5094,7 @@ class _AuthCardState extends State<_AuthCard> {
         const Text('Role *', style: _fieldLabelStyle),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: _selectedRole,
+          value: _selectedRole,
           icon: const Icon(Icons.expand_more, color: Color(0xFF6B7280)),
           decoration: InputDecoration(
             filled: true,
@@ -7960,7 +7960,7 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
                                           children: [
                                             _buildFieldLabel('Assign Member'),
                                             DropdownButtonFormField<String>(
-                                              initialValue: _selectedMemberId,
+                                              value: _selectedMemberId,
                                               decoration: _inputDecoration(
                                                   'Add members'),
                                               hint: Text(
@@ -13390,7 +13390,7 @@ class _AdminCreateUsersDialogState extends State<_AdminCreateUsersDialog> {
                     left: _labeledField(
                       label: 'Role',
                       child: DropdownButtonFormField<String>(
-                        initialValue: _selectedRole,
+                        value: _selectedRole,
                         decoration: _decoration('Select role'),
                         hint: const Text('Select role'),
                         items: const [
@@ -13434,7 +13434,7 @@ class _AdminCreateUsersDialogState extends State<_AdminCreateUsersDialog> {
                                     ),
                                   )
                                 : DropdownButtonFormField<String>(
-                                    initialValue: _selectedAgency,
+                                    value: _selectedAgency,
                                     decoration: _decoration('Select agency'),
                                     hint: const Text('Select agency'),
                                     items: _agencies.map((agency) {
@@ -14537,7 +14537,7 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
               final Widget topicField = _buildLabeledField(
                 label: 'Topic',
                 child: DropdownButtonFormField<String>(
-                  initialValue: _selectedTopic,
+                  value: _selectedTopic,
                   items: const [
                     DropdownMenuItem(value: 'THINK', child: Text('THINK')),
                     DropdownMenuItem(value: 'KEEP', child: Text('KEEP')),
@@ -14561,7 +14561,7 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
               final Widget tagsField = _buildLabeledField(
                 label: 'Tags',
                 child: DropdownButtonFormField<String>(
-                  initialValue: _selectedTag,
+                  value: _selectedTag,
                   items: const [
                     DropdownMenuItem(value: 'No Tags', child: Text('No Tags')),
                     DropdownMenuItem(
@@ -18536,7 +18536,7 @@ class _GoalSettingToolCardState extends State<_GoalSettingToolCard> {
           const SizedBox(height: 24),
           _buildLabel('Member'),
           DropdownButtonFormField<String>(
-            initialValue: _selectedMemberId,
+            value: _selectedMemberId,
             items: _members
                 .map((m) => DropdownMenuItem(
                       value: m['id'] as String,
@@ -18603,7 +18603,7 @@ class _GoalSettingToolCardState extends State<_GoalSettingToolCard> {
           const SizedBox(height: 24),
           _buildLabel('Goal Type'),
           DropdownButtonFormField<String>(
-            initialValue: _selectedGoalType,
+            value: _selectedGoalType,
             items: const [
               DropdownMenuItem(
                   value: 'Growth Goal', child: Text('Growth Goal')),
@@ -19200,7 +19200,7 @@ Next Steps:
                 const Text('Member', style: _fieldLabelStyle),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  initialValue: _selectedMemberId,
+                  value: _selectedMemberId,
                   items: _members
                       .map((m) => DropdownMenuItem(
                             value: m['id'] as String,
@@ -20221,7 +20221,7 @@ class _CreateNoteDialogState extends State<_CreateNoteDialog> {
                             ),
                           )
                         : DropdownButtonFormField<String>(
-                            initialValue: _selectedMemberId,
+                            value: _selectedMemberId,
                             decoration: _inputDecoration(_members.isEmpty
                                 ? 'No members assigned'
                                 : 'Select member'),
@@ -20240,7 +20240,7 @@ class _CreateNoteDialogState extends State<_CreateNoteDialog> {
                     _buildLabel('Note Type'),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      initialValue: _selectedNoteType,
+                      value: _selectedNoteType,
                       decoration: _inputDecoration('Select note type'),
                       items: _noteTypes
                           .map((type) =>
@@ -20253,7 +20253,7 @@ class _CreateNoteDialogState extends State<_CreateNoteDialog> {
                     _buildLabel('Tags'),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      initialValue: _selectedTag,
+                      value: _selectedTag,
                       decoration: _inputDecoration('Select tag'),
                       items: _tags
                           .map((tag) =>
@@ -23440,7 +23440,7 @@ class _SettingsPageState extends State<SettingsPage> {
     required ValueChanged<String> onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      value: value,
       items: options
           .map(
             (option) => DropdownMenuItem<String>(
@@ -23816,7 +23816,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
-          initialValue: value,
+          value: value,
           items: options
               .map(
                 (option) => DropdownMenuItem<String>(
@@ -32124,6 +32124,15 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
   String _core4StrongestAlignment = '';
   String _core4AreasForGrowth = '';
 
+  // Blueprint Utilization specific fields
+  int _blueprintWeek = 1;
+  String _blueprintIssueOpportunity = '';
+  String _blueprintToolUsed = '';
+  String _blueprintOutcome = '';
+  int _blueprintMonthlyUtilization = 0;
+  int _blueprintEffectivenessRating = 0;
+  String _blueprintMostValuableApplication = '';
+
   @override
   void initState() {
     super.initState();
@@ -32424,6 +32433,28 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
                 : null,
             'areas_for_growth':
                 _core4AreasForGrowth.isNotEmpty ? _core4AreasForGrowth : null,
+            'submitted_at': FieldValue.serverTimestamp(),
+            'status': 'submitted',
+          };
+        } else if (widget.metricTitle == 'Blueprint Utilization') {
+          // Handle Blueprint Utilization form
+          data = {
+            'user_ref': userRef,
+            'user_email': user.email,
+            'metric_title': widget.metricTitle,
+            'week': _blueprintWeek,
+            'issue_opportunity': _blueprintIssueOpportunity.isNotEmpty
+                ? _blueprintIssueOpportunity
+                : null,
+            'blueprint_tool_used':
+                _blueprintToolUsed.isNotEmpty ? _blueprintToolUsed : null,
+            'outcome': _blueprintOutcome.isNotEmpty ? _blueprintOutcome : null,
+            'monthly_utilization': _blueprintMonthlyUtilization,
+            'effectiveness_rating': _blueprintEffectivenessRating,
+            'most_valuable_application':
+                _blueprintMostValuableApplication.isNotEmpty
+                    ? _blueprintMostValuableApplication
+                    : null,
             'submitted_at': FieldValue.serverTimestamp(),
             'status': 'submitted',
           };
@@ -32847,6 +32878,11 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
       return _buildCore4AlignmentForm(maxWidth, padding);
     }
 
+    // Use specialized form for Blueprint Utilization
+    if (widget.metricTitle == 'Blueprint Utilization') {
+      return _buildBlueprintUtilizationForm(maxWidth, padding);
+    }
+
     return Container(
       width: double.infinity,
       padding: padding,
@@ -33065,6 +33101,586 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  // Blueprint Utilization specialized form
+  Widget _buildBlueprintUtilizationForm(double maxWidth, EdgeInsets padding) {
+    final bool isMobile = maxWidth < 720;
+
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: const Border.fromBorderSide(
+            BorderSide(color: ScorecardPage._borderColor)),
+        boxShadow: const [
+          BoxShadow(
+              color: _cardShadowColor, blurRadius: 12, offset: Offset(0, 6)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Description
+          const Text(
+            'Using the Breakaway365 Blueprint tool for problem-solving and growth',
+            style: TextStyle(color: ScorecardPage._mutedColor, fontSize: 14),
+          ),
+          const SizedBox(height: 20),
+          // Header row with column labels for desktop/tablet
+          if (!isMobile) _buildBlueprintTableHeader(),
+          // Main form entry row
+          _buildBlueprintEntryRow(isMobile),
+          const SizedBox(height: 28),
+          // Monthly Utilization and Blueprint Effectiveness Rating row
+          LayoutBuilder(
+            builder: (context, constraints) =>
+                _buildBlueprintUtilizationAndRating(constraints.maxWidth),
+          ),
+          const SizedBox(height: 24),
+          // Most Valuable Application
+          _smallLabeled(
+            label: 'Most valuable Application:',
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(16),
+                border: const Border.fromBorderSide(
+                    BorderSide(color: ScorecardPage._borderColor)),
+              ),
+              child: TextFormField(
+                minLines: 4,
+                maxLines: 8,
+                initialValue: _blueprintMostValuableApplication,
+                decoration: const InputDecoration(
+                  hintText: 'none',
+                  border: InputBorder.none,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  hintStyle: TextStyle(color: ScorecardPage._mutedColor),
+                ),
+                style: const TextStyle(color: ScorecardPage._titleColor),
+                onChanged: (v) => _blueprintMostValuableApplication = v,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlueprintTableHeader() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFF8FAFC),
+            const Color(0xFFF1F5F9),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: const [
+          Expanded(
+            flex: 10,
+            child: Text(
+              'Week',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 25,
+            child: Text(
+              'Issue/Opportunity',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 25,
+            child: Text(
+              'Blueprint Tool Used',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            flex: 25,
+            child: Text(
+              'Outcome',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF475569)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlueprintEntryRow(bool isMobile) {
+    if (isMobile) {
+      // Mobile: Stack fields vertically
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _blueprintWeekFieldMobile(),
+            const SizedBox(height: 16),
+            _blueprintIssueFieldMobile(),
+            const SizedBox(height: 16),
+            _blueprintToolFieldMobile(),
+            const SizedBox(height: 16),
+            _blueprintOutcomeFieldMobile(),
+          ],
+        ),
+      );
+    }
+
+    // Desktop/Tablet: Horizontal row
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(flex: 10, child: _blueprintWeekFieldCompact()),
+          const SizedBox(width: 10),
+          Expanded(flex: 25, child: _blueprintIssueFieldCompact()),
+          const SizedBox(width: 10),
+          Expanded(flex: 25, child: _blueprintToolFieldCompact()),
+          const SizedBox(width: 10),
+          Expanded(flex: 25, child: _blueprintOutcomeFieldCompact()),
+        ],
+      ),
+    );
+  }
+
+  // Mobile field widgets for Blueprint Utilization
+  Widget _blueprintWeekFieldMobile() {
+    return _blueprintMobileFieldWrapper(
+      label: 'Week',
+      icon: Icons.calendar_view_week_rounded,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: TextFormField(
+          initialValue: _blueprintWeek.toString(),
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+            hintText: '1',
+            hintStyle: TextStyle(color: ScorecardPage._mutedColor),
+          ),
+          style: const TextStyle(
+            color: ScorecardPage._titleColor,
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+          ),
+          onChanged: (v) => _blueprintWeek = int.tryParse(v) ?? 1,
+        ),
+      ),
+    );
+  }
+
+  Widget _blueprintIssueFieldMobile() {
+    return _blueprintMobileFieldWrapper(
+      label: 'Issue/Opportunity',
+      icon: Icons.lightbulb_outline_rounded,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: TextFormField(
+          initialValue: _blueprintIssueOpportunity,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+            hintText: 'none',
+            hintStyle: TextStyle(color: ScorecardPage._mutedColor),
+          ),
+          style: const TextStyle(
+            color: ScorecardPage._titleColor,
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+          ),
+          onChanged: (v) => _blueprintIssueOpportunity = v,
+        ),
+      ),
+    );
+  }
+
+  Widget _blueprintToolFieldMobile() {
+    return _blueprintMobileFieldWrapper(
+      label: 'Blueprint Tool Used',
+      icon: Icons.build_outlined,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: TextFormField(
+          initialValue: _blueprintToolUsed,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+            hintText: 'none',
+            hintStyle: TextStyle(color: ScorecardPage._mutedColor),
+          ),
+          style: const TextStyle(
+            color: ScorecardPage._titleColor,
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+          ),
+          onChanged: (v) => _blueprintToolUsed = v,
+        ),
+      ),
+    );
+  }
+
+  Widget _blueprintOutcomeFieldMobile() {
+    return _blueprintMobileFieldWrapper(
+      label: 'Outcome',
+      icon: Icons.check_circle_outline_rounded,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: TextFormField(
+          initialValue: _blueprintOutcome,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+            hintText: 'none',
+            hintStyle: TextStyle(color: ScorecardPage._mutedColor),
+          ),
+          style: const TextStyle(
+            color: ScorecardPage._titleColor,
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+          ),
+          onChanged: (v) => _blueprintOutcome = v,
+        ),
+      ),
+    );
+  }
+
+  Widget _blueprintMobileFieldWrapper({
+    required String label,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF6B7280)),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: Color(0xFF475569),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+
+  // Compact field widgets for Blueprint Utilization (Desktop/Tablet)
+  Widget _blueprintWeekFieldCompact() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: TextFormField(
+        initialValue: _blueprintWeek.toString(),
+        keyboardType: TextInputType.number,
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+          hintText: '1',
+          hintStyle: TextStyle(color: ScorecardPage._mutedColor, fontSize: 14),
+        ),
+        style: const TextStyle(
+          color: ScorecardPage._titleColor,
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
+        onChanged: (v) => _blueprintWeek = int.tryParse(v) ?? 1,
+      ),
+    );
+  }
+
+  Widget _blueprintIssueFieldCompact() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: TextFormField(
+        initialValue: _blueprintIssueOpportunity,
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+          hintText: 'none',
+          hintStyle: TextStyle(color: ScorecardPage._mutedColor, fontSize: 14),
+        ),
+        style: const TextStyle(
+          color: ScorecardPage._titleColor,
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
+        onChanged: (v) => _blueprintIssueOpportunity = v,
+      ),
+    );
+  }
+
+  Widget _blueprintToolFieldCompact() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: TextFormField(
+        initialValue: _blueprintToolUsed,
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+          hintText: 'none',
+          hintStyle: TextStyle(color: ScorecardPage._mutedColor, fontSize: 14),
+        ),
+        style: const TextStyle(
+          color: ScorecardPage._titleColor,
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
+        onChanged: (v) => _blueprintToolUsed = v,
+      ),
+    );
+  }
+
+  Widget _blueprintOutcomeFieldCompact() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: TextFormField(
+        initialValue: _blueprintOutcome,
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+          hintText: 'none',
+          hintStyle: TextStyle(color: ScorecardPage._mutedColor, fontSize: 14),
+        ),
+        style: const TextStyle(
+          color: ScorecardPage._titleColor,
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
+        onChanged: (v) => _blueprintOutcome = v,
+      ),
+    );
+  }
+
+  Widget _buildBlueprintUtilizationAndRating(double width) {
+    final bool isMobile = width < 600;
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _blueprintMonthlyUtilizationField(),
+          const SizedBox(height: 16),
+          _blueprintEffectivenessRatingField(),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _blueprintMonthlyUtilizationField()),
+        const SizedBox(width: 24),
+        Expanded(child: _blueprintEffectivenessRatingField()),
+      ],
+    );
+  }
+
+  Widget _blueprintMonthlyUtilizationField() {
+    return Row(
+      children: [
+        const Text(
+          'Monthly Utilization:',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            color: ScorecardPage._titleColor,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: _blueprintMonthlyUtilization,
+              items: List.generate(
+                11,
+                (i) => DropdownMenuItem(
+                  value: i,
+                  child: Text(
+                    '$i',
+                    style: const TextStyle(
+                      color: ScorecardPage._titleColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() => _blueprintMonthlyUtilization = v);
+                }
+              },
+              icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF6B7280)),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Text(
+          'times',
+          style: TextStyle(
+            fontSize: 14,
+            color: ScorecardPage._mutedColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _blueprintEffectivenessRatingField() {
+    return Row(
+      children: [
+        const Text(
+          'Blueprint Effectiveness Rating (1-10):',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            color: ScorecardPage._titleColor,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: _blueprintEffectivenessRating,
+              items: List.generate(
+                11,
+                (i) => DropdownMenuItem(
+                  value: i,
+                  child: Text(
+                    '$i',
+                    style: const TextStyle(
+                      color: ScorecardPage._titleColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() => _blueprintEffectivenessRating = v);
+                }
+              },
+              icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF6B7280)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -33886,7 +34502,7 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
       label: 'Delegation Level',
       child: _boxed(
         child: DropdownButtonFormField<String>(
-          initialValue: entry.delegationLevel,
+          value: entry.delegationLevel,
           items: const [
             DropdownMenuItem(value: 'Select...', child: Text('Select...')),
             DropdownMenuItem(value: 'Full', child: Text('Full')),
@@ -33913,7 +34529,7 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
       label: 'Outcome',
       child: _boxed(
         child: DropdownButtonFormField<String>(
-          initialValue: entry.outcome,
+          value: entry.outcome,
           items: const [
             DropdownMenuItem(
                 value: 'Select outcome', child: Text('Select outcome')),
@@ -34304,7 +34920,7 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
       label: 'Focus Area',
       child: _boxed(
         child: DropdownButtonFormField<String>(
-          initialValue: _focusArea,
+          value: _focusArea,
           items: const [
             DropdownMenuItem(value: 'none', child: Text('none')),
             DropdownMenuItem(value: 'Strategy', child: Text('Strategy')),
@@ -34348,7 +34964,7 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
       label: 'Value Generated',
       child: _boxed(
         child: DropdownButtonFormField<String>(
-          initialValue: _valueGenerated,
+          value: _valueGenerated,
           items: const [
             DropdownMenuItem(value: 'Select...', child: Text('Select...')),
             DropdownMenuItem(value: 'Low', child: Text('Low')),
@@ -34484,10 +35100,10 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
       child: Row(
         children: [
           _boxed(
-            child: SizedBox(
-              width: 84,
-              child: DropdownButtonFormField<int>(
-                initialValue: _achievementPct,
+              child: SizedBox(
+                width: 84,
+                child: DropdownButtonFormField<int>(
+                  value: _achievementPct,
                 items: List.generate(11, (i) => i * 10)
                     .map((e) => DropdownMenuItem(value: e, child: Text('$e')))
                     .toList(),
