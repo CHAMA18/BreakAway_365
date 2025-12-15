@@ -40503,6 +40503,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   if (item != NavigationItem.contentLibrary) {
                     widget.onNavigate?.call(item);
                     Navigator.of(context).pop();
+                  } else {
+                    // Always navigate back to content library when clicked
+                    Navigator.of(context).pop();
                   }
                 },
                 onLogout: () async {
@@ -40811,6 +40814,292 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   }
 }
 
+class _DocumentsButton extends StatelessWidget {
+  const _DocumentsButton({
+    required this.documentCount,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  final int documentCount;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: isLoading ? null : onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isLoading 
+              ? const Color(0xFFF1F5F9)
+              : const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: const Color(0xFFDBEAFE),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.description_outlined,
+              color: isLoading 
+                  ? const Color(0xFF94A3B8)
+                  : const Color(0xFF3B82F6),
+              size: 14,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              isLoading 
+                  ? 'Loading...'
+                  : '$documentCount ${documentCount == 1 ? "Document" : "Documents"}',
+              style: TextStyle(
+                color: isLoading 
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF3B82F6),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DocumentsDialog extends StatelessWidget {
+  const _DocumentsDialog({required this.documents});
+
+  final List<Map<String, dynamic>> documents;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.description_outlined,
+                      color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Course Documents',
+                    style: TextStyle(
+                      color: Color(0xFF1E293B),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (documents.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.folder_open_outlined,
+                          color: Color(0xFF94A3B8), size: 28),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No documents available',
+                      style: TextStyle(
+                        color: Color(0xFF475569),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Documents will appear here once added',
+                      style: TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: documents.length,
+                  separatorBuilder: (_, __) => const Divider(
+                    height: 1,
+                    color: Color(0xFFF1F5F9),
+                  ),
+                  itemBuilder: (context, index) {
+                    final document = documents[index];
+                    final docName = document['doc_name'] as String? ?? 'Untitled Document';
+                    final docUrl = document['docUrl'] as String?;
+
+                    return _DocumentTile(
+                      docName: docName,
+                      docUrl: docUrl,
+                      onTap: () => _downloadDocument(docName, docUrl, context),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _downloadDocument(String docName, String? docUrl, BuildContext context) async {
+    if (docUrl == null || docUrl.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Document download URL not available')),
+        );
+      }
+      return;
+    }
+
+    try {
+      if (kIsWeb) {
+        // For web, open in new tab
+        await launchUrl(Uri.parse(docUrl), mode: LaunchMode.externalApplication);
+      } else {
+        // For mobile/desktop, use url_launcher
+        await launchUrl(Uri.parse(docUrl), mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('❌ Error downloading document: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to download document: $e')),
+        );
+      }
+    }
+  }
+}
+
+class _DocumentTile extends StatelessWidget {
+  const _DocumentTile({
+    required this.docName,
+    required this.docUrl,
+    required this.onTap,
+  });
+
+  final String docName;
+  final String? docUrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: docUrl != null ? onTap : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: docUrl != null 
+                    ? const Color(0xFFEFF6FF)
+                    : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.insert_drive_file_outlined,
+                color: docUrl != null 
+                    ? const Color(0xFF3B82F6)
+                    : const Color(0xFF94A3B8),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    docName,
+                    style: TextStyle(
+                      color: docUrl != null 
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFF64748B),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (docUrl == null) ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Download not available',
+                      style: TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (docUrl != null)
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.download_outlined,
+                  color: Color(0xFF3B82F6),
+                  size: 18,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CourseModuleInfo {
   const _CourseModuleInfo({
     required this.title,
@@ -40854,11 +41143,14 @@ class _ModulesPanelState extends State<_ModulesPanel> {
   final Map<String, String?> _thumbnailCache = {};
   bool _isLoadingVideos = false;
   List<_CourseModuleInfo> _loadedVideos = [];
+  List<Map<String, dynamic>> _documents = [];
+  bool _isLoadingDocuments = false;
 
   @override
   void initState() {
     super.initState();
     _loadVideosFromCourse();
+    _loadDocuments();
   }
 
   Future<void> _loadVideosFromCourse() async {
@@ -41001,6 +41293,94 @@ class _ModulesPanelState extends State<_ModulesPanel> {
         });
       }
     }
+  }
+
+  Future<void> _loadDocuments() async {
+    if (_isLoadingDocuments) return;
+    setState(() {
+      _isLoadingDocuments = true;
+    });
+
+    try {
+      // Get the course document to access its docs field
+      final courseDoc = await FirebaseFirestore.instance
+          .collection('courses')
+          .doc(widget.courseId)
+          .get();
+
+      if (!courseDoc.exists) {
+        debugPrint('📄 Course Documents: Course not found: ${widget.courseId}');
+        if (mounted) {
+          setState(() {
+            _documents = [];
+            _isLoadingDocuments = false;
+          });
+        }
+        return;
+      }
+
+      final courseData = courseDoc.data() ?? {};
+      final docsField = courseData['docs'];
+      
+      List<String> documentIds = [];
+      if (docsField is List) {
+        for (final item in docsField) {
+          if (item is String && item.isNotEmpty) {
+            documentIds.add(item);
+          } else if (item is DocumentReference) {
+            documentIds.add(item.id);
+          }
+        }
+      }
+
+      final List<Map<String, dynamic>> fetchedDocuments = [];
+      
+      // Fetch documents from the 'document' collection
+      if (documentIds.isNotEmpty) {
+        final documentsCollection = FirebaseFirestore.instance.collection('document');
+        
+        for (final docId in documentIds) {
+          try {
+            final doc = await documentsCollection.doc(docId).get();
+            if (doc.exists) {
+              final data = doc.data() ?? {};
+              fetchedDocuments.add({
+                'id': doc.id,
+                'doc_name': data['doc_name'] as String? ?? 'Untitled Document',
+                'docUrl': data['docUrl'] as String?,
+                ...data,
+              });
+            }
+          } catch (e) {
+            debugPrint('❌ Course Documents: Error fetching document $docId: $e');
+          }
+        }
+      }
+
+      debugPrint('📄 Course Documents: Loaded ${fetchedDocuments.length} documents');
+      
+      if (mounted) {
+        setState(() {
+          _documents = fetchedDocuments;
+          _isLoadingDocuments = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Error loading documents: $e');
+      if (mounted) {
+        setState(() {
+          _documents = [];
+          _isLoadingDocuments = false;
+        });
+      }
+    }
+  }
+
+  void _showDocumentsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => _DocumentsDialog(documents: _documents),
+    );
   }
 
   _CourseModuleInfo? _parseVideoDoc(
@@ -41221,32 +41601,43 @@ class _ModulesPanelState extends State<_ModulesPanel> {
                       ),
                     ],
                   ),
-                ),
-                if (!_isLoadingVideos && displayModules.isNotEmpty)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFDCFCE7),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle,
-                            color: const Color(0xFF16A34A), size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Ready',
-                          style: TextStyle(
-                            color: const Color(0xFF16A34A),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+),
+                 Row(
+                   children: [
+                     if (!_isLoadingVideos && displayModules.isNotEmpty)
+                       Container(
+                         padding:
+                             const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                         decoration: BoxDecoration(
+                           color: const Color(0xFFDCFCE7),
+                           borderRadius: BorderRadius.circular(8),
+                         ),
+                         child: Row(
+                           mainAxisSize: MainAxisSize.min,
+                           children: [
+                             Icon(Icons.check_circle,
+                                 color: const Color(0xFF16A34A), size: 14),
+                             const SizedBox(width: 4),
+                             Text(
+                               'Ready',
+                               style: TextStyle(
+                                 color: const Color(0xFF16A34A),
+                                 fontSize: 11,
+                                 fontWeight: FontWeight.w600,
+                               ),
+                             ),
+                           ],
+                         ),
+                       ),
+                     const SizedBox(width: 8),
+                     // Documents button
+                     _DocumentsButton(
+                       documentCount: _documents.length,
+                       isLoading: _isLoadingDocuments,
+                       onTap: _showDocumentsDialog,
+                     ),
+                   ],
+                 ),
               ],
             ),
           ),
@@ -46576,9 +46967,9 @@ class _ProfileNotificationsContent extends StatelessWidget {
                         'chatId': doc.id,
                         'actorName': data['lastSenderName'],
                       });
-                    }
-                  }
-                }
+}
+    }
+  }
 
                 // Sort all items by date
                 allItems.sort((a, b) => (b['createdAt'] as DateTime)
