@@ -36992,33 +36992,37 @@ class _BreakawayCourseCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Thumbnail
-            Container(
-              height: 120,
-              decoration: BoxDecoration(
-                color: course.thumbnailColor,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
               ),
-              child: course.thumbnailUrl != null
-                  ? ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(20),
-                        topRight: Radius.circular(20),
-                      ),
-                      child: Image.network(
+              child: Container(
+                height: 120,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: course.thumbnailColor,
+                ),
+                child: course.thumbnailUrl != null
+                    ? Image.network(
                         course.thumbnailUrl!,
                         fit: BoxFit.cover,
                         width: double.infinity,
                         height: 120,
+                        errorBuilder: (context, error, stackTrace) => Image.asset(
+                          'assets/images/documentation.png',
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: 120,
+                        ),
+                      )
+                    : Image.asset(
+                        'assets/images/documentation.png',
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: 120,
                       ),
-                    )
-                  : const Icon(
-                      Icons.folder,
-                      size: 48,
-                      color: Colors.white,
-                    ),
+              ),
             ),
             // Content
             Padding(
@@ -37992,130 +37996,342 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
   Widget _buildContentList(List<_LibraryCardData> items, {required bool isVideo}) {
     if (items.isEmpty) {
       return Center(
-        child: Text(
-          'No ${isVideo ? 'videos' : 'documents'} available.',
-          style: const TextStyle(color: ContentLibraryPage._mutedColor),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isVideo ? Icons.videocam_off_outlined : Icons.folder_off_outlined,
+              size: 48,
+              color: ContentLibraryPage._mutedColor.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No ${isVideo ? 'videos' : 'documents'} available.',
+              style: const TextStyle(color: ContentLibraryPage._mutedColor, fontSize: 15),
+            ),
+          ],
         ),
       );
     }
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(24),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 1.2,
-      ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return GestureDetector(
-          onTap: () {
-            if (isVideo) {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => ContentDetailPage(
-                    course: widget.course,
-                    currentVideoId: item.id,
-                  ),
-                ),
-              );
-            } else if (item.downloadUrl != null) {
-              _launchUrl(item.downloadUrl!);
-            }
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: ContentLibraryPage._borderColor),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x0D0F172A),
-                  blurRadius: 12,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Thumbnail
-                Container(
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: item.thumbnailColor,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                    ),
-                  ),
-                  child: item.thumbnailUrl != null
-                      ? ClipRRect(
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
-                          ),
-                          child: Image.network(
-                            item.thumbnailUrl!,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: 80,
-                          ),
-                        )
-                      : Icon(
-                          isVideo ? Icons.play_circle_outline : Icons.description_outlined,
-                          size: 32,
-                          color: Colors.white,
-                        ),
-                ),
-                // Content
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: ContentLibraryPage._titleColor,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.subtitle,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: ContentLibraryPage._mutedColor,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const Spacer(),
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Icon(
-                            isVideo ? Icons.play_arrow : Icons.download,
-                            size: 20,
-                            color: ContentLibraryPage._buttonBlue,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Responsive: 1 column on narrow, 2 on medium, 3 on wide
+        final crossAxisCount = constraints.maxWidth < 500 ? 1 : (constraints.maxWidth < 900 ? 2 : 3);
+        return GridView.builder(
+          padding: const EdgeInsets.all(24),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: isVideo ? 1.4 : 2.2,
           ),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return isVideo
+                ? _buildVideoCard(context, item)
+                : _buildDocumentCard(context, item);
+          },
         );
       },
     );
+  }
+
+  Widget _buildVideoCard(BuildContext context, _LibraryCardData item) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ContentDetailPage(
+                course: widget.course,
+                currentVideoId: item.id,
+              ),
+            ),
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Thumbnail with play overlay
+              Expanded(
+                flex: 3,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+                      child: item.thumbnailUrl != null
+                          ? Image.network(
+                              item.thumbnailUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _videoPlaceholder(item.thumbnailColor),
+                            )
+                          : _videoPlaceholder(item.thumbnailColor),
+                    ),
+                    // Play button overlay
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.3),
+                            ],
+                          ),
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.95),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.play_arrow_rounded,
+                              color: ContentLibraryPage._buttonBlue,
+                              size: 28,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Title section
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: ContentLibraryPage._titleColor,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.play_circle_outline_rounded,
+                            size: 14,
+                            color: ContentLibraryPage._mutedColor.withValues(alpha: 0.7),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              item.subtitle.isNotEmpty ? item.subtitle : 'Watch video',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: ContentLibraryPage._mutedColor.withValues(alpha: 0.8),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _videoPlaceholder(Color? color) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color ?? const Color(0xFF3B82F6),
+            (color ?? const Color(0xFF3B82F6)).withValues(alpha: 0.7),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.videocam_rounded,
+          size: 36,
+          color: Colors.white.withValues(alpha: 0.8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDocumentCard(BuildContext context, _LibraryCardData item) {
+    // Determine file type and icon/color
+    final fileExt = _getFileExtension(item.downloadUrl ?? item.title);
+    final (IconData icon, Color iconBgColor, Color iconColor) = _getDocIconStyle(fileExt);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          if (item.downloadUrl != null) {
+            _launchUrl(item.downloadUrl!);
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // File type icon
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              // Title and meta
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      item.title,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: ContentLibraryPage._titleColor,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: iconBgColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            fileExt.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: iconColor,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        if (item.downloadUrl != null)
+                          Icon(
+                            Icons.download_rounded,
+                            size: 16,
+                            color: ContentLibraryPage._buttonBlue.withValues(alpha: 0.8),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getFileExtension(String path) {
+    final lastDot = path.lastIndexOf('.');
+    if (lastDot != -1 && lastDot < path.length - 1) {
+      final ext = path.substring(lastDot + 1).toLowerCase();
+      // Clean query params
+      final queryIndex = ext.indexOf('?');
+      return queryIndex != -1 ? ext.substring(0, queryIndex) : ext;
+    }
+    return 'doc';
+  }
+
+  (IconData, Color, Color) _getDocIconStyle(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return (Icons.picture_as_pdf_rounded, const Color(0xFFFEE2E2), const Color(0xFFDC2626));
+      case 'doc':
+      case 'docx':
+        return (Icons.description_rounded, const Color(0xFFDBEAFE), const Color(0xFF2563EB));
+      case 'xls':
+      case 'xlsx':
+        return (Icons.table_chart_rounded, const Color(0xFFDCFCE7), const Color(0xFF16A34A));
+      case 'ppt':
+      case 'pptx':
+        return (Icons.slideshow_rounded, const Color(0xFFFEF3C7), const Color(0xFFD97706));
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return (Icons.image_rounded, const Color(0xFFF3E8FF), const Color(0xFF9333EA));
+      case 'mp4':
+      case 'mov':
+      case 'avi':
+        return (Icons.video_file_rounded, const Color(0xFFE0E7FF), const Color(0xFF4F46E5));
+      default:
+        return (Icons.insert_drive_file_rounded, const Color(0xFFF3F4F6), const Color(0xFF6B7280));
+    }
   }
 
   void _launchUrl(String url) async {
