@@ -9497,7 +9497,8 @@ enum _AdminMemberActionType {
   approve,
   assignCoach,
   reassignCoach,
-  removeMember
+  removeMember,
+  none
 }
 
 enum _AdminMemberFocus { all, pendingApproval, needsCoach, activelyCoached }
@@ -9584,7 +9585,6 @@ class _AdminMemberRowData {
       }
     }
 
-    // Calculate progress based on THINK and KEEP completions
     final completedModules = <Map<String, String>>[];
     double calculatedProgress = 0.0;
 
@@ -9635,7 +9635,8 @@ class _AdminMemberRowData {
       calculatedProgress =
           totalModules > 0 ? completedCount / totalModules : 0.0;
     } catch (e) {
-      debugPrint('Failed to calculate progress for user $userId: $e');
+      debugPrint('Error calculating progress for user $userId: $e');
+      calculatedProgress = 0.0;
     }
 
     // Extract profile image URL
@@ -9646,30 +9647,113 @@ class _AdminMemberRowData {
 
     final _AdminMemberActionType actionType = !approved
         ? _AdminMemberActionType.approve
-        : (approved && !hasCoachAssignment && role.toLowerCase() == 'member'
+        : (approved && !hasCoachAssignment && role.toLowerCase() == 'member')
             ? _AdminMemberActionType.assignCoach
-            : _AdminMemberActionType.assignCoach);
-
-    final bool hasSecondaryAction =
-        resolvedAgencyName.toLowerCase() == 'add to agency' ||
-            role.toLowerCase() == 'member';
+            : _AdminMemberActionType.none;
 
     final String email = data['email'] as String? ?? '';
 
     return _AdminMemberRowData(
       userId: userId,
-      name: name.isEmpty ? 'Unnamed User' : name,
+      name: name,
       role: role,
+      approved: approved,
       agency: resolvedAgencyName,
       coach: resolvedCoachName,
       progress: calculatedProgress,
       actionType: actionType,
       email: email,
-      hasSecondaryAction: hasSecondaryAction,
-      approved: approved,
+      completedModules: completedModules,
       hasCoachAssignment: hasCoachAssignment,
       profileImageUrl: profileImageUrl,
+    );
+  }
+
+  // Optimized version that uses pre-loaded progress data
+  static _AdminMemberRowData fromFirestoreWithProgress(
+    String userId,
+    Map<String, dynamic> data,
+    Map<String, dynamic> progressData,
+    int totalModules, {
+    bool hasCoachAssignment = false,
+    String? agencyName,
+    String? coachName,
+  }) {
+    final String firstName = data['firstName'] as String? ?? '';
+    final String lastName = data['lastName'] as String? ?? '';
+    final String displayName = data['display_name'] as String? ??
+        data['displayName'] as String? ??
+        data['username'] as String? ??
+        '';
+    final String name =
+        displayName.isNotEmpty ? displayName : '$firstName $lastName'.trim();
+
+    final String role = (data['role'] as String? ?? 'Member').trim();
+    final bool approved = data['isApproved'] as bool? ??
+        data['approved'] as bool? ??
+        data['accountStatus'] == 'approved' ??
+        false;
+
+    // Use agencyName from parameter (looked up from agencies collection) if provided
+    String resolvedAgencyName = agencyName ?? 'add to agency';
+
+    // Fallback to reading from user document if not found in agencies collection
+    if (resolvedAgencyName == 'add to agency') {
+      dynamic agencyField = data['agency'];
+      if (agencyField is DocumentReference) {
+        resolvedAgencyName = agencyField.id;
+      } else if (agencyField is String && agencyField.isNotEmpty) {
+        resolvedAgencyName = agencyField;
+      } else if (data['agencyName'] is String &&
+          (data['agencyName'] as String).isNotEmpty) {
+        resolvedAgencyName = data['agencyName'] as String;
+      }
+    }
+
+    // Use coachName from parameter (looked up from member_coach collection) if provided
+    String resolvedCoachName = coachName ?? '';
+
+    // Fallback to reading from user document if not found in member_coach collection
+    if (resolvedCoachName.isEmpty) {
+      dynamic coachField = data['coach'];
+      if (coachField is DocumentReference) {
+        resolvedCoachName = coachField.id;
+      } else if (coachField is String) {
+        resolvedCoachName = coachField;
+      }
+    }
+
+    final completedModules = progressData['completedModules'] as List<Map<String, String>>? ?? [];
+    final completedCount = completedModules.length;
+    final calculatedProgress = totalModules > 0 ? completedCount / totalModules : 0.0;
+
+    // Extract profile image URL
+    final String? profileImageUrl = data['profileImageUrl'] as String? ??
+        data['profile_image_url'] as String? ??
+        data['photoURL'] as String? ??
+        data['profilePicture'] as String?;
+
+    final _AdminMemberActionType actionType = !approved
+        ? _AdminMemberActionType.approve
+        : (approved && !hasCoachAssignment && role.toLowerCase() == 'member')
+            ? _AdminMemberActionType.assignCoach
+            : _AdminMemberActionType.none;
+
+    final String email = data['email'] as String? ?? '';
+
+    return _AdminMemberRowData(
+      userId: userId,
+      name: name,
+      role: role,
+      approved: approved,
+      agency: resolvedAgencyName,
+      coach: resolvedCoachName,
+      progress: calculatedProgress,
+      actionType: actionType,
+      email: email,
       completedModules: completedModules,
+      hasCoachAssignment: hasCoachAssignment,
+      profileImageUrl: profileImageUrl,
     );
   }
 
@@ -9818,32 +9902,113 @@ class _AdminMemberManagementViewState
     Map<String, String> memberToCoachMap,
     Map<String, String> coachIdToNameMap,
   ) async {
-    for (final doc in docs) {
-      final memberData = doc.data() as Map<String, dynamic>;
-      final bool hasCoachAssignment = assignedMemberIds.contains(doc.id);
-      final String? agencyFromMap = userAgencyMap[doc.id];
-      final String? coachId = memberToCoachMap[doc.id];
-      final String? coachName =
-          coachId != null ? coachIdToNameMap[coachId] : null;
+    final stopwatch = Stopwatch()..start();
+    debugPrint('🚀 Starting optimized progress loading for ${docs.length} members');
+    
+    // Batch load all necessary data at once
+    final Map<String, Map<String, dynamic>> progressData = await _batchLoadProgressData(docs);
+    debugPrint('⚡ Batch loading completed in ${stopwatch.elapsedMilliseconds}ms');
+    
+    // Get total modules once
+    final totalModules = await _getTotalModulesCount();
+    
+    // Process members in smaller batches to avoid blocking UI
+    const batchSize = 10;
+    for (int i = 0; i < docs.length; i += batchSize) {
+      final batch = docs.skip(i).take(batchSize).toList();
+      
+      for (final doc in batch) {
+        final memberData = doc.data() as Map<String, dynamic>;
+        final bool hasCoachAssignment = assignedMemberIds.contains(doc.id);
+        final String? agencyFromMap = userAgencyMap[doc.id];
+        final String? coachId = memberToCoachMap[doc.id];
+        final String? coachName =
+            coachId != null ? coachIdToNameMap[coachId] : null;
 
-      final memberWithProgress = await _AdminMemberRowData.fromFirestoreAsync(
-        doc.id,
-        memberData,
-        hasCoachAssignment: hasCoachAssignment,
-        agencyName: agencyFromMap,
-        coachName: coachName,
-      );
+        final memberWithProgress = _AdminMemberRowData.fromFirestoreWithProgress(
+          doc.id,
+          memberData,
+          progressData[doc.id] ?? {},
+          totalModules,
+          hasCoachAssignment: hasCoachAssignment,
+          agencyName: agencyFromMap,
+          coachName: coachName,
+        );
 
-      if (mounted) {
-        setState(() {
-          _membersWithProgress[doc.id] = memberWithProgress;
-          // Update the member in the main list
-          final index = _members.indexWhere((m) => m.userId == doc.id);
-          if (index != -1) {
-            _members[index] = memberWithProgress;
-          }
-        });
+        if (mounted) {
+          setState(() {
+            _membersWithProgress[doc.id] = memberWithProgress;
+            // Update the member in the main list
+            final index = _members.indexWhere((m) => m.userId == doc.id);
+            if (index != -1) {
+              _members[index] = memberWithProgress;
+            }
+          });
+        }
       }
+      
+      // Small delay to allow UI updates
+      await Future.delayed(const Duration(milliseconds: 10));
+    }
+    
+    debugPrint('✅ Progress loading completed in ${stopwatch.elapsedMilliseconds}ms');
+  }
+  
+  Future<Map<String, Map<String, dynamic>>> _batchLoadProgressData(
+    List<QueryDocumentSnapshot> docs
+  ) async {
+    final firestore = FirebaseFirestore.instance;
+    final Map<String, Map<String, dynamic>> allProgressData = {};
+    
+    // Batch query for all completions
+    final List<Future<QuerySnapshot>> completionFutures = [];
+    for (final doc in docs) {
+      completionFutures.add(
+        firestore
+            .collection('users')
+            .doc(doc.id)
+            .collection('completed_courses')
+            .where('topic', whereIn: ['THINK', 'KEEP'])
+            .get()
+      );
+    }
+    
+    final completionSnapshots = await Future.wait(completionFutures);
+    
+    for (int i = 0; i < docs.length; i++) {
+      final doc = docs[i];
+      final snapshot = completionSnapshots[i];
+      
+      final completedModules = <Map<String, String>>[];
+      for (final doc in snapshot.docs) {
+        final docData = doc.data() as Map<String, dynamic>?;
+        if (docData != null) {
+          completedModules.add({
+            'title': docData['title'] as String? ?? 'Module',
+            'topic': docData['topic'] as String? ?? 'UNKNOWN',
+          });
+        }
+      }
+      
+      allProgressData[doc.id] = {
+        'completedModules': completedModules,
+      };
+    }
+    
+    return allProgressData;
+  }
+  
+  Future<int> _getTotalModulesCount() async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final videoSnapshot = await firestore
+          .collection('video')
+          .where('topic', whereIn: ['THINK', 'KEEP'])
+          .get();
+      return videoSnapshot.docs.length;
+    } catch (e) {
+      debugPrint('Error getting total modules count: $e');
+      return 20; // Fallback
     }
   }
 
@@ -9852,29 +10017,14 @@ class _AdminMemberManagementViewState
     setState(() => _isLoadingProgress = true);
 
     try {
+      final stopwatch = Stopwatch()..start();
+      debugPrint('🚀 Starting optimized average progress calculation');
+      
       final firestore = FirebaseFirestore.instance;
 
-      // Get total number of THINK and KEEP modules from courses collection
-      int thinkTotal = 0;
-      int keepTotal = 0;
-
-      final thinkDoc = await firestore.collection('courses').doc('think').get();
-      if (thinkDoc.exists) {
-        final thinkData = thinkDoc.data();
-        thinkTotal = (thinkData?['totalModules'] as num? ?? 10).toInt();
-      } else {
-        thinkTotal = 10; // Default
-      }
-
-      final keepDoc = await firestore.collection('courses').doc('keep').get();
-      if (keepDoc.exists) {
-        final keepData = keepDoc.data();
-        keepTotal = (keepData?['totalModules'] as num? ?? 10).toInt();
-      } else {
-        keepTotal = 10; // Default
-      }
-
-      final totalModules = thinkTotal + keepTotal;
+      // Get total modules once
+      final totalModules = await _getTotalModulesCount();
+      debugPrint('📊 Total modules: $totalModules');
 
       // Get all users
       final usersSnapshot = await firestore.collection('users').get();
@@ -9884,36 +10034,33 @@ class _AdminMemberManagementViewState
         return;
       }
 
-      double totalProgress = 0.0;
-      int userCount = 0;
-
+      // Batch load all completion data
+      final List<Future<QuerySnapshot>> completionFutures = [];
       for (final userDoc in usersSnapshot.docs) {
-        // Count THINK completions
-        final thinkCompletions = await firestore
-            .collection('users')
-            .doc(userDoc.id)
-            .collection('completions')
-            .where('courseId', isEqualTo: 'think')
-            .get();
+        completionFutures.add(
+          firestore
+              .collection('users')
+              .doc(userDoc.id)
+              .collection('completed_courses')
+              .where('topic', whereIn: ['THINK', 'KEEP'])
+              .get()
+        );
+      }
 
-        // Count KEEP completions
-        final keepCompletions = await firestore
-            .collection('users')
-            .doc(userDoc.id)
-            .collection('completions')
-            .where('courseId', isEqualTo: 'keep')
-            .get();
+      final completionSnapshots = await Future.wait(completionFutures);
+      
+      double totalProgress = 0.0;
+      int userCount = usersSnapshot.docs.length;
 
-        final userCompletedCount =
-            thinkCompletions.docs.length + keepCompletions.docs.length;
-        final userProgress =
-            totalModules > 0 ? userCompletedCount / totalModules : 0.0;
-
+      for (int i = 0; i < usersSnapshot.docs.length; i++) {
+        final completedCount = completionSnapshots[i].docs.length;
+        final userProgress = totalModules > 0 ? completedCount / totalModules : 0.0;
         totalProgress += userProgress;
-        userCount++;
       }
 
       final avgProgress = userCount > 0 ? totalProgress / userCount : 0.0;
+      
+      debugPrint('✅ Average progress calculated in ${stopwatch.elapsedMilliseconds}ms');
 
       if (mounted) {
         setState(() {
@@ -9922,6 +10069,7 @@ class _AdminMemberManagementViewState
         });
       }
     } catch (e) {
+      debugPrint('Error calculating average progress: $e');
       if (mounted) {
         setState(() => _isLoadingProgress = false);
       }
