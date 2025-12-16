@@ -14329,6 +14329,7 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
       if (useGCS) {
         // Use GCS for large files
         final storagePath = '$fileType/$fileName';
+        debugPrint('📤 [GCS] Starting upload to $storagePath (type=$contentType, size=${_formatFileSize(file.size)})');
 
         if (file.readStream != null) {
           // Use stream if available (non-web platforms)
@@ -14372,6 +14373,7 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
         if (file.bytes != null) {
           // Use the proper path based on file type (video/ or document/)
           final storagePath = '$fileType/$fileName';
+          debugPrint('📤 [Firebase Storage] Starting upload to $storagePath (type=$contentType, size=${_formatFileSize(file.size)})');
           final storageRef = FirebaseStorage.instance.ref().child(storagePath);
           final uploadTask = storageRef.putData(
             file.bytes!,
@@ -14390,13 +14392,15 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
           });
 
           final snapshot = await uploadTask;
-          return await snapshot.ref.getDownloadURL();
+          final url = await snapshot.ref.getDownloadURL();
+          debugPrint('✅ Upload complete for $storagePath');
+          return url;
         } else {
           throw Exception('File data not available');
         }
       }
     } catch (e) {
-      print('Error uploading file: $e');
+      debugPrint('❌ Error uploading $fileType: $e');
       rethrow;
     }
   }

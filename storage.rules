@@ -29,10 +29,12 @@ service firebase.storage {
       allow write: if isOwner(userId);
     }
     
-    // Course content - authenticated users can read
+    // Course content assets (e.g., cover images)
+    // Authenticated users can read. Writes limited to authenticated users.
+    // If you later add admin custom claims, update this to check request.auth.token.admin == true
     match /courses/{courseId}/{allPaths=**} {
       allow read: if isAuthenticated();
-      allow write: if false; // Only admins via backend
+      allow write: if isAuthenticated();
     }
     
     // Public assets - anyone can read
@@ -52,8 +54,16 @@ service firebase.storage {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
+
+    // Thumbnails used by courses/videos
+    match /thumbnail/{allPaths=**} {
+      allow read: if true; // thumbnails are safe to cache publicly
+      allow write: if isAuthenticated();
+    }
     
     // Global size limit for uploads
-    allow write: if request.resource.size < 20 * 1024 * 1024 * 1024; // 20GB
+    // Apply only if a more specific match above does not override.
+    // Also require authentication to avoid public writes to unspecified paths.
+    allow write: if isAuthenticated() && request.resource.size < 20 * 1024 * 1024 * 1024; // 20GB
   }
 }
