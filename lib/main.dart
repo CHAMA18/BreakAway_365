@@ -6372,22 +6372,62 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       return;
     }
 
+    // Password validation
+    if (data.password.length < 6) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Password must be at least 6 characters.'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.red,
+          ),
+        );
+      return;
+    }
+
+    FirebaseApp? secondaryApp;
     try {
-      // Create user document in 'users' collection awaiting approval
-      final userDoc = FirebaseFirestore.instance.collection('users').doc();
-      final userId = userDoc.id;
+      // Use a secondary Firebase app to create the user without signing out the current admin
+      // This is necessary because createUserWithEmailAndPassword signs in the newly created user
+      final String secondaryAppName = 'SecondaryApp_${DateTime.now().millisecondsSinceEpoch}';
+      secondaryApp = await Firebase.initializeApp(
+        name: secondaryAppName,
+        options: Firebase.app().options,
+      );
+
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      
+      // Create the Firebase Auth account
+      final credential = await secondaryAuth.createUserWithEmailAndPassword(
+        email: data.email.trim(),
+        password: data.password,
+      );
+
+      final newUser = credential.user;
+      if (newUser == null) {
+        throw Exception('Failed to create user account.');
+      }
+
+      final userId = newUser.uid;
+
+      // Sign out from secondary auth
+      await secondaryAuth.signOut();
+
+      // Create user document in 'users' collection using the Auth UID
+      final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
 
       await userDoc.set({
         'username': data.username,
-        'email': data.email,
-        'first_name': data.firstName,
-        'last_name': data.lastName,
+        'email': data.email.trim(),
+        'firstName': data.firstName,
+        'lastName': data.lastName,
+        'displayName': '${data.firstName} ${data.lastName}'.trim(),
         'role': data.role,
         'agency': data.role == 'Admin' ? null : data.agency,
-        'password': data.password, // In production, hash this password!
-        'status': 'pending_approval',
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
+        'status': 'approved', // Auto-approve since admin created the account
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
       // If agency is selected, add user reference to agency's members field
@@ -6400,28 +6440,68 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         });
       }
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text(
-                'User account created successfully and awaiting approval.'),
-            duration: Duration(seconds: 3),
-            backgroundColor: Colors.green,
-          ),
-        );
-      _closeCreateUsersModal();
-    } catch (e) {
-      print('Error creating user: \$e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text('Error creating user: \$e'),
+            content: Text(
+                'User account created successfully! ${data.email} can now login.'),
+            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.green,
+          ),
+        );
+      _closeCreateUsersModal();
+    } on FirebaseAuthException catch (e) {
+      debugPrint('FirebaseAuthException creating user: ${e.code} - ${e.message}');
+      String errorMessage = 'Error creating user account.';
+      switch (e.code) {
+        case 'email-already-in-use':
+          errorMessage = 'An account with this email already exists.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'The email address is invalid.';
+          break;
+        case 'weak-password':
+          errorMessage = 'The password is too weak. Use at least 6 characters.';
+          break;
+        case 'operation-not-allowed':
+          errorMessage = 'Email/password accounts are not enabled.';
+          break;
+        default:
+          errorMessage = e.message ?? 'Error creating user account.';
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
             duration: const Duration(seconds: 3),
             backgroundColor: Colors.red,
           ),
         );
+    } catch (e) {
+      debugPrint('Error creating user: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Error creating user: $e'),
+            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+    } finally {
+      // Clean up the secondary app
+      if (secondaryApp != null) {
+        try {
+          await secondaryApp.delete();
+        } catch (e) {
+          debugPrint('Error deleting secondary app: $e');
+        }
+      }
     }
   }
 
