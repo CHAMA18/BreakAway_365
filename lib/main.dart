@@ -29,6 +29,8 @@ import 'services/gcs_service.dart';
 import 'widgets/embed_view_stub.dart'
     if (dart.library.html) 'widgets/embed_view_web.dart' as embed;
 import 'widgets/shimmer_skeleton.dart';
+import 'widgets/walkthrough_overlay.dart';
+import 'services/walkthrough_service.dart';
 
 import 'firebase_options.dart';
 
@@ -3824,6 +3826,9 @@ class MyApp extends StatelessWidget {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: ThemeMode.light,
+      builder: (context, child) {
+        return WalkthroughOverlay(child: child ?? const SizedBox.shrink());
+      },
       home: const AuthLandingPage(),
     );
   }
@@ -11311,6 +11316,10 @@ class _AdminMemberManagementViewState
 
   Widget _buildMemberTable(double maxWidth) {
     final List<_AdminMemberRowData> rows = _getFilteredMembers(_members);
+    // Minimum width to ensure all columns are visible
+    final double minTableWidth = 900.0;
+    final double tableWidth = maxWidth < minTableWidth ? minTableWidth : maxWidth;
+    
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -11320,26 +11329,33 @@ class _AdminMemberManagementViewState
               color: Color(0x0A1E293B), blurRadius: 12, offset: Offset(0, 4)),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildHeaderRow(),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          if (rows.isEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 40),
-              alignment: Alignment.center,
-              child: const Text(
-                'No members found for this view.',
-                style: TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500),
-              ),
-            )
-          else
-            ...rows.map(_buildMemberRow),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: tableWidth),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildHeaderRow(),
+              const Divider(height: 1, color: Color(0xFFE5E7EB)),
+              if (rows.isEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'No members found for this view.',
+                    style: TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500),
+                  ),
+                )
+              else
+                ...rows.map(_buildMemberRow),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -11352,10 +11368,10 @@ class _AdminMemberManagementViewState
       letterSpacing: 0.6,
     );
 
-    Widget buildCell(String label,
-        {int flex = 1, Alignment alignment = Alignment.centerLeft}) {
-      return Expanded(
-        flex: flex,
+    Widget buildCell(String label, double width,
+        {Alignment alignment = Alignment.centerLeft}) {
+      return SizedBox(
+        width: width,
         child: Align(
           alignment: alignment,
           child: Text(label.toUpperCase(), style: headerStyle),
@@ -11371,19 +11387,17 @@ class _AdminMemberManagementViewState
       ),
       child: Row(
         children: [
-          buildCell('Member', flex: 3),
-          buildCell('Agency', flex: 2),
-          buildCell('Coach', flex: 2),
-          buildCell('Progress', flex: 2),
-          buildCell('Actions', flex: 2, alignment: Alignment.centerRight),
+          buildCell('Member', 200),
+          buildCell('Agency', 150),
+          buildCell('Coach', 150),
+          buildCell('Progress', 120),
+          buildCell('Actions', 280, alignment: Alignment.centerRight),
         ],
       ),
     );
   }
 
   Widget _buildMemberRow(_AdminMemberRowData data) {
-    final bool isApprove = data.actionType == _AdminMemberActionType.approve;
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: const BoxDecoration(
@@ -11393,10 +11407,10 @@ class _AdminMemberManagementViewState
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: _buildMemberCell(data)),
-          Expanded(flex: 2, child: _buildAgencyDropdownCell(data)),
-          Expanded(
-            flex: 2,
+          SizedBox(width: 200, child: _buildMemberCell(data)),
+          SizedBox(width: 150, child: _buildAgencyDropdownCell(data)),
+          SizedBox(
+            width: 150,
             child: Text(
               data.coach.isEmpty ? '—' : data.coach,
               style: const TextStyle(
@@ -11406,8 +11420,8 @@ class _AdminMemberManagementViewState
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          Expanded(flex: 2, child: _buildProgressBar(data.progress, data)),
-          Expanded(flex: 2, child: _buildActionCell(data)),
+          SizedBox(width: 120, child: _buildProgressBar(data.progress, data)),
+          SizedBox(width: 280, child: _buildActionCell(data)),
         ],
       ),
     );
@@ -11471,27 +11485,24 @@ class _AdminMemberManagementViewState
       onTap: () => _showProgressDialog(data),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-        child: Padding(
-          padding: const EdgeInsets.only(right: 24),
-          child: Container(
-            height: 8,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE5E7EB),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            alignment: Alignment.centerLeft,
-            child: value > 0
-                ? FractionallySizedBox(
-                    widthFactor: value.clamp(0, 1),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3CC7C9),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink(),
+        child: Container(
+          height: 8,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE5E7EB),
+            borderRadius: BorderRadius.circular(999),
           ),
+          alignment: Alignment.centerLeft,
+          child: value > 0
+              ? FractionallySizedBox(
+                  widthFactor: value.clamp(0, 1),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3CC7C9),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink(),
         ),
       ),
     );
@@ -11506,15 +11517,73 @@ class _AdminMemberManagementViewState
         data.hasCoachAssignment &&
         data.role.toLowerCase() == 'member';
 
-    if (!isApprove && !needsCoach && !hasCoach) {
-      return const SizedBox.shrink();
+    // Build a list of action buttons based on member state
+    final List<Widget> actionButtons = [];
+
+    // Always add Edit and Delete buttons for all members
+    actionButtons.add(
+      SizedBox(
+        height: 36,
+        child: IconButton(
+          style: IconButton.styleFrom(
+            backgroundColor: const Color(0xFFF3F4F6),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: () => _showEditMemberDialog(data),
+          icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF4B5563)),
+          tooltip: 'Edit Member',
+        ),
+      ),
+    );
+    actionButtons.add(const SizedBox(width: 4));
+    actionButtons.add(
+      SizedBox(
+        height: 36,
+        child: IconButton(
+          style: IconButton.styleFrom(
+            backgroundColor: const Color(0xFFFEE2E2),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: () => _showDeleteMemberDialog(data),
+          icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFEF4444)),
+          tooltip: 'Delete Member',
+        ),
+      ),
+    );
+
+    // For unapproved members: add "Approve" button
+    if (isApprove) {
+      actionButtons.add(const SizedBox(width: 6));
+      actionButtons.add(
+        SizedBox(
+          height: 36,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            ),
+            onPressed: () => _approveMember(data),
+            icon: const Icon(Icons.check_circle_outline, size: 16),
+            label: const Text(
+              'Approve',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      );
     }
 
-    // For members without a coach: show "Assign Coach" button
+    // For members without a coach: add "Assign Coach" button
     if (needsCoach) {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: SizedBox(
+      actionButtons.add(const SizedBox(width: 6));
+      actionButtons.add(
+        SizedBox(
           height: 36,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -11523,116 +11592,427 @@ class _AdminMemberManagementViewState
               elevation: 0,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             ),
             onPressed: () => _showAssignCoachDialog(data),
-            icon: const Icon(Icons.person_add_outlined, size: 18),
+            icon: const Icon(Icons.person_add_outlined, size: 16),
             label: const Text(
-              'Assign Coach',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              'Assign',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ),
         ),
       );
     }
 
-    // For members with a coach: show "Remove Member", "Reassign Coach", and "Upload Results" buttons
+    // For members with a coach: add "Reassign Coach" and "Upload Results" buttons
     if (hasCoach) {
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: 36,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFEF4444),
-                  side: const BorderSide(color: Color(0xFFEF4444)),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                ),
-                onPressed: () => _showRemoveMemberDialog(data),
-                icon: const Icon(Icons.person_remove_outlined, size: 16),
-                label: const Text(
-                  'Remove',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ),
+      actionButtons.add(const SizedBox(width: 6));
+      actionButtons.add(
+        SizedBox(
+          height: 36,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             ),
-            const SizedBox(width: 6),
-            SizedBox(
-              height: 36,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                ),
-                onPressed: () => _showReassignCoachDialog(data),
-                icon: const Icon(Icons.swap_horiz, size: 16),
-                label: const Text(
-                  'Reassign',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ),
+            onPressed: () => _showReassignCoachDialog(data),
+            icon: const Icon(Icons.swap_horiz, size: 16),
+            label: const Text(
+              'Reassign',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(width: 6),
-            SizedBox(
-              height: 36,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                ),
-                onPressed: () => _openUploadResultsPage(data),
-                icon: const Icon(Icons.upload_file, size: 16),
-                label: const Text(
-                  'Upload Results',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ),
+          ),
+        ),
+      );
+      actionButtons.add(const SizedBox(width: 6));
+      actionButtons.add(
+        SizedBox(
+          height: 36,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             ),
-          ],
+            onPressed: () => _openUploadResultsPage(data),
+            icon: const Icon(Icons.upload_file, size: 16),
+            label: const Text(
+              'Results',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
         ),
       );
     }
 
-    // For unapproved members: show "Approve" button
-    return Align(
-      alignment: Alignment.centerRight,
-      child: SizedBox(
-        height: 36,
-        child: ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2563EB),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          ),
-          onPressed: () => _approveMember(data),
-          icon: const Icon(Icons.check_circle_outline, size: 18),
-          label: const Text(
-            'Approve',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: actionButtons,
+      ),
+    );
+  }
+
+  Future<void> _showEditMemberDialog(_AdminMemberRowData data) async {
+    final firstNameController = TextEditingController();
+    final lastNameController = TextEditingController();
+    final emailController = TextEditingController(text: data.email);
+    String? selectedRole = data.role;
+    String? selectedAgency;
+    List<Map<String, String>> agencies = [];
+    bool loadingAgencies = true;
+
+    // Load current user data
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(data.userId)
+          .get();
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        firstNameController.text = userData['firstName'] as String? ?? '';
+        lastNameController.text = userData['lastName'] as String? ?? '';
+        
+        // Get current agency
+        final agencyField = userData['agency'];
+        if (agencyField is DocumentReference) {
+          selectedAgency = agencyField.id;
+        } else if (agencyField is String && agencyField.isNotEmpty) {
+          selectedAgency = agencyField;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+    }
+
+    // Load agencies
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('agencies').get();
+      agencies = snapshot.docs.map((doc) {
+        final docData = doc.data();
+        return {
+          'id': doc.id,
+          'name': (docData['agency_name'] ?? docData['name'] ?? 'Unknown Agency') as String,
+        };
+      }).toList();
+      agencies.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
+      loadingAgencies = false;
+    } catch (e) {
+      debugPrint('Error loading agencies: $e');
+      loadingAgencies = false;
+    }
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            width: 480,
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Edit Member',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Update information for ${data.name}',
+                    style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('First Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: firstNameController,
+                              decoration: InputDecoration(
+                                hintText: 'First name',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Last Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: lastNameController,
+                              decoration: InputDecoration(
+                                hintText: 'Last name',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Email', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      hintText: 'Email address',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Role', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Admin', child: Text('Admin')),
+                      DropdownMenuItem(value: 'Coach', child: Text('Coach')),
+                      DropdownMenuItem(value: 'Member', child: Text('Member')),
+                    ],
+                    onChanged: (value) => setState(() => selectedRole = value),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Agency', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  loadingAgencies
+                      ? Container(
+                          height: 48,
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text('Loading agencies...', style: TextStyle(color: Color(0xFF9CA3AF))),
+                        )
+                      : DropdownButtonFormField<String>(
+                          value: agencies.any((a) => a['id'] == selectedAgency) ? selectedAgency : null,
+                          decoration: InputDecoration(
+                            hintText: 'Select agency',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          ),
+                          items: agencies.map((agency) {
+                            return DropdownMenuItem(
+                              value: agency['id'],
+                              child: Text(agency['name']!),
+                            );
+                          }).toList(),
+                          onChanged: (value) => setState(() => selectedAgency = value),
+                        ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () async {
+                          try {
+                            final updateData = <String, dynamic>{
+                              'firstName': firstNameController.text.trim(),
+                              'lastName': lastNameController.text.trim(),
+                              'email': emailController.text.trim(),
+                              'role': selectedRole,
+                            };
+                            
+                            if (selectedAgency != null && selectedAgency!.isNotEmpty) {
+                              updateData['agency'] = FirebaseFirestore.instance
+                                  .collection('agencies')
+                                  .doc(selectedAgency);
+                            }
+                            
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(data.userId)
+                                .update(updateData);
+                            
+                            if (context.mounted) {
+                              Navigator.of(context).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Member updated successfully!'),
+                                  backgroundColor: Color(0xFF22C55E),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            debugPrint('Error updating member: $e');
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to update member: $e'),
+                                  backgroundColor: const Color(0xFFEF4444),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text('Save Changes'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _showDeleteMemberDialog(_AdminMemberRowData data) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Member'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete ${data.name}?'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEE2E2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'This action cannot be undone. The user will be permanently removed from the system.',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF991B1B)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Remove user from any agency's members array
+        final agenciesSnapshot = await FirebaseFirestore.instance
+            .collection('agencies')
+            .where('members', arrayContains: FirebaseFirestore.instance.collection('users').doc(data.userId))
+            .get();
+        
+        for (final agencyDoc in agenciesSnapshot.docs) {
+          await agencyDoc.reference.update({
+            'members': FieldValue.arrayRemove([
+              FirebaseFirestore.instance.collection('users').doc(data.userId)
+            ]),
+            'active_members': FieldValue.arrayRemove([
+              FirebaseFirestore.instance.collection('users').doc(data.userId)
+            ]),
+          });
+        }
+
+        // Delete the user document
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(data.userId)
+            .delete();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${data.name} has been deleted successfully'),
+              backgroundColor: const Color(0xFF22C55E),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('Error deleting member: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete member: $e'),
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _approveMember(_AdminMemberRowData data) async {
@@ -23427,8 +23807,165 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         const SizedBox(height: 32),
+        _buildHelpAndTutorialSection(stackColumns),
+        const SizedBox(height: 32),
         _buildDangerZone(stackColumns),
       ],
+    );
+  }
+
+  Widget _buildHelpAndTutorialSection(bool isCompact) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        isCompact ? 24 : 28,
+        isCompact ? 24 : 28,
+        isCompact ? 24 : 28,
+        isCompact ? 26 : 32,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: const Border.fromBorderSide(
+            BorderSide(color: SettingsPage._borderColor)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: SettingsPage._accentTeal.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.school_outlined,
+                  color: SettingsPage._accentTeal,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Help & Tutorial',
+                      style: TextStyle(
+                        color: SettingsPage._titleColor,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Learn how to use all features of the platform',
+                      style: TextStyle(
+                        color: SettingsPage._mutedColor,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Interactive walkthroughs help you understand each feature of the platform. Select any page to start a guided tour.',
+            style: TextStyle(
+              color: SettingsPage._mutedColor,
+              fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Quick walkthrough buttons
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _TutorialQuickButton(
+                icon: Icons.dashboard_outlined,
+                label: 'Dashboard',
+                pageId: 'dashboard',
+              ),
+              _TutorialQuickButton(
+                icon: Icons.video_library_outlined,
+                label: 'Content Library',
+                pageId: 'content_library',
+              ),
+              _TutorialQuickButton(
+                icon: Icons.assignment_outlined,
+                label: 'Assessments',
+                pageId: 'assessments',
+              ),
+              _TutorialQuickButton(
+                icon: Icons.score_outlined,
+                label: 'Scorecard',
+                pageId: 'scorecard',
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // View all walkthroughs button
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: SettingsPage._accentTeal,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                textStyle:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                elevation: 0,
+              ),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => const WalkthroughSelectionDialog(),
+                );
+              },
+              icon: const Icon(Icons.play_circle_outline, size: 20, color: Colors.white),
+              label: const Text('View All Page Walkthroughs'),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Reset walkthroughs button
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: SettingsPage._mutedColor,
+                side: const BorderSide(color: SettingsPage._borderColor, width: 1.2),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                textStyle:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              onPressed: () async {
+                await WalkthroughService().resetAllWalkthroughs();
+                _showSnack('All walkthrough progress has been reset.');
+              },
+              icon: const Icon(Icons.refresh_outlined, size: 18, color: SettingsPage._mutedColor),
+              label: const Text('Reset Walkthrough Progress'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -24222,6 +24759,77 @@ class _SettingsTabButton extends StatelessWidget {
                   fontSize: 15,
                   fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TutorialQuickButton extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final String pageId;
+
+  const _TutorialQuickButton({
+    required this.icon,
+    required this.label,
+    required this.pageId,
+  });
+
+  @override
+  State<_TutorialQuickButton> createState() => _TutorialQuickButtonState();
+}
+
+class _TutorialQuickButtonState extends State<_TutorialQuickButton> {
+  bool _isHovered = false;
+
+  static const Color _accentTeal = Color(0xFF1BA4B8);
+  static const Color _titleColor = Color(0xFF111827);
+  static const Color _mutedColor = Color(0xFF6B7280);
+  static const Color _borderColor = Color(0xFFE5E7EB);
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: () => WalkthroughService().startWalkthrough(widget.pageId),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: _isHovered ? _accentTeal.withValues(alpha: 0.08) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _isHovered ? _accentTeal.withValues(alpha: 0.4) : _borderColor,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                widget.icon,
+                size: 18,
+                color: _isHovered ? _accentTeal : _mutedColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  color: _isHovered ? _accentTeal : _titleColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.play_circle_outline,
+                size: 16,
+                color: _isHovered ? _accentTeal : _mutedColor,
               ),
             ],
           ),
@@ -41444,24 +42052,32 @@ class _FirestoreCourseGrid extends StatelessWidget {
             final badge =
                 _readString(data['badge']) ?? _readString(data['series']);
 
-            // Normalize topic for comparison
-            final topicNormalized = topic?.toLowerCase().trim();
-            final badgeNormalized = badge?.toLowerCase().trim();
+            // Normalize topic for comparison - treat 'null' string as actual null
+            String? topicNormalized = topic?.toLowerCase().trim();
+            String? badgeNormalized = badge?.toLowerCase().trim();
+            
+            // Filter out items with null, empty, or 'null' string topics when filtering by specific category
+            if (topicNormalized == null || topicNormalized.isEmpty || topicNormalized == 'null') {
+              // Check if badge matches before excluding
+              if (badgeNormalized == null || badgeNormalized.isEmpty || badgeNormalized == 'null') {
+                continue; // Skip items without valid topic or badge
+              }
+            }
 
             bool matchesTopicFilter = false;
 
-            // Check if topic matches the filter
-            if (topicNormalized == normalizedFilter) {
+            // Check if topic matches the filter exactly
+            if (topicNormalized != null && topicNormalized != 'null' && topicNormalized == normalizedFilter) {
               matchesTopicFilter = true;
-            } else if (badgeNormalized == normalizedFilter) {
+            } else if (badgeNormalized != null && badgeNormalized != 'null' && badgeNormalized == normalizedFilter) {
               matchesTopicFilter = true;
             } else if (normalizedFilter == 'expert series' &&
-                (badgeNormalized?.contains('expert') == true ||
-                    topicNormalized?.contains('expert') == true)) {
+                ((badgeNormalized != null && badgeNormalized != 'null' && badgeNormalized.contains('expert')) ||
+                    (topicNormalized != null && topicNormalized != 'null' && topicNormalized.contains('expert')))) {
               matchesTopicFilter = true;
             } else if (normalizedFilter == 'immersive footage' &&
-                (topicNormalized?.contains('immersive') == true ||
-                    badgeNormalized?.contains('immersive') == true)) {
+                ((topicNormalized != null && topicNormalized != 'null' && topicNormalized.contains('immersive')) ||
+                    (badgeNormalized != null && badgeNormalized != 'null' && badgeNormalized.contains('immersive')))) {
               matchesTopicFilter = true;
             }
 
