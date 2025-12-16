@@ -39563,14 +39563,12 @@ class _ImmersiveFootageViewState extends State<_ImmersiveFootageView> {
 
               void openCourse(BuildContext context, _LibraryCardData course,
                   List<_LibraryCardData> siblings) {
+                // Open the course detail page with Documents and Videos tabs
+                // instead of the video player (ContentDetailPage)
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (detailContext) => ContentDetailPage(
+                    builder: (detailContext) => _BreakawayCourseDetailPage(
                       course: course,
-                      relatedCourses: siblings,
-                      onDownloadRequested: (selected) =>
-                          _attemptLibraryCourseDownload(
-                              detailContext, selected),
                       isAdmin: widget.isAdmin,
                     ),
                   ),
