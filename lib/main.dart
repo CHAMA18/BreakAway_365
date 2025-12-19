@@ -7444,8 +7444,8 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
   final FocusNode _agencySummaryFocusNode = FocusNode();
   final FocusNode _locationFocusNode = FocusNode();
 
-  List<_DirectoryPersonOption> _memberOptions = const [];
-  String? _selectedMemberId;
+  List<_DirectoryPersonOption> _memberOptions = [];
+  List<String> _selectedMemberIds = [];
   bool _loadingMembers = true;
 
   Uint8List? _profilePreviewBytes;
@@ -7557,6 +7557,209 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
     return null;
   }
 
+  Widget _buildMultiSelectDropdown() {
+    return GestureDetector(
+      onTap: _loadingMembers ? null : () => _showMemberSelectionDialog(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.white,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _selectedMemberIds.isEmpty
+                  ? Text(
+                      _loadingMembers ? 'Loading members...' : 'Add members',
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 14,
+                      ),
+                    )
+                  : Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: _selectedMemberIds.map((memberId) {
+                        final member = _memberOptions
+                            .where((option) => option.id == memberId)
+                            .firstOrNull;
+                        if (member == null) return const SizedBox.shrink();
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                member.name,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedMemberIds.remove(memberId);
+                                  });
+                                },
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF64748B),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMemberSelectionDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.8,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Select Members',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: _memberOptions.length,
+                        itemBuilder: (context, index) {
+                          final option = _memberOptions[index];
+                          final isSelected =
+                              _selectedMemberIds.contains(option.id);
+                          return CheckboxListTile(
+                            value: isSelected,
+                            onChanged: (bool? value) {
+                              setDialogState(() {
+                                if (value == true) {
+                                  setState(() {
+                                    _selectedMemberIds.add(option.id);
+                                  });
+                                } else {
+                                  setState(() {
+                                    _selectedMemberIds.remove(option.id);
+                                  });
+                                }
+                              });
+                            },
+                            title: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: const Color(0xFFE2E8F0),
+                                  backgroundImage: option.avatarUrl != null
+                                      ? NetworkImage(option.avatarUrl!)
+                                      : null,
+                                  child: option.avatarUrl == null
+                                      ? Text(
+                                          option.initials,
+                                          style: const TextStyle(
+                                            color: Color(0xFF1E293B),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        option.name,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                      if (option.subtitle != null)
+                                        Text(
+                                          option.subtitle!,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF64748B),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 0, vertical: 4),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text(
+                              'Select (${_selectedMemberIds.length}) Members'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _pickProfileImage() async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -7601,13 +7804,6 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
       return;
     }
 
-    if (_selectedMemberId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a member to assign')),
-      );
-      return;
-    }
-
     if (_locationController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a location')),
@@ -7645,18 +7841,16 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
       }
 
       // Get selected member details
-      final selectedMember = _memberOptions.firstWhere(
-        (option) => option.id == _selectedMemberId,
-      );
+      final selectedMembers = _memberOptions
+          .where((option) => _selectedMemberIds.contains(option.id))
+          .toList();
 
       // Create agency document
       final agencyData = {
-        'name': agencyName,
+        'agency_name': agencyName,
         'summary': _agencySummaryController.text.trim(),
         'location': _locationController.text.trim(),
         'profileImageUrl': profileImageUrl,
-        'assignedMemberId': _selectedMemberId,
-        'assignedMemberName': selectedMember.name,
         'createdBy': currentUser.uid,
         'createdByName':
             currentUser.displayName ?? currentUser.email ?? 'Unknown',
@@ -7665,6 +7859,15 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
         'status': 'active',
       };
 
+      // Only add member-related fields if members are selected
+      if (_selectedMemberIds.isNotEmpty) {
+        agencyData.addAll({
+          'assignedMemberIds': _selectedMemberIds,
+          'assignedMemberNames': selectedMembers.map((m) => m.name).toList(),
+          'memberCount': _selectedMemberIds.length,
+        });
+      }
+
       debugPrint('💾 Saving agency to Firestore: $agencyName');
 
       final docRef = await FirebaseFirestore.instance
@@ -7672,6 +7875,35 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
           .add(agencyData);
 
       debugPrint('✅ Agency created successfully with ID: ${docRef.id}');
+
+      // Update selected members with agency name and add them to agency's members field
+      if (_selectedMemberIds.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        final agencyRef =
+            FirebaseFirestore.instance.collection('agencies').doc(docRef.id);
+
+        // Add member references to agency's members field
+        final memberRefs = _selectedMemberIds
+            .map((memberId) =>
+                FirebaseFirestore.instance.collection('users').doc(memberId))
+            .toList();
+
+        batch.update(agencyRef, {'members': memberRefs});
+
+        // Update each selected member's agency field with agency name
+        for (final memberId in _selectedMemberIds) {
+          final userRef =
+              FirebaseFirestore.instance.collection('users').doc(memberId);
+          batch.update(userRef, {
+            'agency': agencyName,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        await batch.commit();
+        debugPrint(
+            '✅ Updated ${_selectedMemberIds.length} members with agency name');
+      }
 
       if (!mounted) return;
 
@@ -7971,104 +8203,7 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             _buildFieldLabel('Assign Member'),
-                                            DropdownButtonFormField<String>(
-                                              value: _selectedMemberId,
-                                              decoration: _inputDecoration(
-                                                  'Add members'),
-                                              hint: Text(
-                                                _loadingMembers
-                                                    ? 'Loading members...'
-                                                    : 'Add members',
-                                                style: const TextStyle(
-                                                  color: Color(0xFF94A3B8),
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                              isExpanded: true,
-                                              icon: const Icon(Icons
-                                                  .keyboard_arrow_down_rounded),
-                                              items:
-                                                  _memberOptions.map((option) {
-                                                return DropdownMenuItem<String>(
-                                                  value: option.id,
-                                                  child: Row(
-                                                    children: [
-                                                      CircleAvatar(
-                                                        radius: 16,
-                                                        backgroundColor:
-                                                            const Color(
-                                                                0xFFE2E8F0),
-                                                        backgroundImage: option
-                                                                    .avatarUrl !=
-                                                                null
-                                                            ? NetworkImage(
-                                                                option
-                                                                    .avatarUrl!)
-                                                            : null,
-                                                        child:
-                                                            option.avatarUrl ==
-                                                                    null
-                                                                ? Text(
-                                                                    option
-                                                                        .initials,
-                                                                    style:
-                                                                        const TextStyle(
-                                                                      color: Color(
-                                                                          0xFF1E293B),
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600,
-                                                                    ),
-                                                                  )
-                                                                : null,
-                                                      ),
-                                                      const SizedBox(width: 12),
-                                                      Expanded(
-                                                        child: Column(
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .start,
-                                                          children: [
-                                                            Text(
-                                                              option.name,
-                                                              style:
-                                                                  const TextStyle(
-                                                                fontSize: 14,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                                color: Color(
-                                                                    0xFF0F172A),
-                                                              ),
-                                                            ),
-                                                            if (option
-                                                                    .subtitle !=
-                                                                null)
-                                                              Text(
-                                                                option
-                                                                    .subtitle!,
-                                                                style:
-                                                                    const TextStyle(
-                                                                  fontSize: 12,
-                                                                  color: Color(
-                                                                      0xFF64748B),
-                                                                ),
-                                                              ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                              }).toList(),
-                                              onChanged: _loadingMembers
-                                                  ? null
-                                                  : (value) {
-                                                      setState(() =>
-                                                          _selectedMemberId =
-                                                              value);
-                                                    },
-                                            ),
+                                            _buildMultiSelectDropdown(),
                                           ],
                                         ),
                                       ),
