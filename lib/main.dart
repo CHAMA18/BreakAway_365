@@ -7510,11 +7510,11 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
 
   String? _resolveDisplayName(Map<String, dynamic> data) {
     final candidates = [
-      data['displayName'],
+      data['display_name'],
       data['fullName'],
       data['name'],
-      data['firstName'] != null || data['lastName'] != null
-          ? [data['firstName'], data['lastName']]
+      data['first_name'] != null || data['last_name'] != null
+          ? [data['first_name'], data['last_name']]
               .whereType<String>()
               .join(' ')
               .trim()
