@@ -6390,14 +6390,15 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     try {
       // Use a secondary Firebase app to create the user without signing out the current admin
       // This is necessary because createUserWithEmailAndPassword signs in the newly created user
-      final String secondaryAppName = 'SecondaryApp_${DateTime.now().millisecondsSinceEpoch}';
+      final String secondaryAppName =
+          'SecondaryApp_${DateTime.now().millisecondsSinceEpoch}';
       secondaryApp = await Firebase.initializeApp(
         name: secondaryAppName,
         options: Firebase.app().options,
       );
 
       final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-      
+
       // Create the Firebase Auth account
       final credential = await secondaryAuth.createUserWithEmailAndPassword(
         email: data.email.trim(),
@@ -6415,7 +6416,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       await secondaryAuth.signOut();
 
       // Create user document in 'users' collection using the Auth UID
-      final userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
+      final userDoc =
+          FirebaseFirestore.instance.collection('users').doc(userId);
 
       await userDoc.set({
         'username': data.username,
@@ -6453,7 +6455,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         );
       _closeCreateUsersModal();
     } on FirebaseAuthException catch (e) {
-      debugPrint('FirebaseAuthException creating user: ${e.code} - ${e.message}');
+      debugPrint(
+          'FirebaseAuthException creating user: ${e.code} - ${e.message}');
       String errorMessage = 'Error creating user account.';
       switch (e.code) {
         case 'email-already-in-use':
@@ -7445,9 +7448,6 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
   String? _selectedMemberId;
   bool _loadingMembers = true;
 
-  DateTime? _startDate;
-  DateTime? _endDate;
-
   Uint8List? _profilePreviewBytes;
   String? _profileFileName;
 
@@ -7589,56 +7589,6 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
     }
   }
 
-  Future<void> _pickDate({required bool isStart}) async {
-    final now = DateTime.now();
-    final initialDate =
-        isStart ? (_startDate ?? now) : (_endDate ?? _startDate ?? now);
-    final firstDate = DateTime(now.year - 5);
-    final lastDate = DateTime(now.year + 5);
-
-    final selectedDate = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
-      helpText: isStart ? 'Select the start date' : 'Select the end date',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF2563EB),
-              onPrimary: Colors.white,
-              onSurface: Color(0xFF0F172A),
-            ),
-          ),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
-    );
-
-    if (selectedDate == null) {
-      return;
-    }
-
-    setState(() {
-      if (isStart) {
-        _startDate = selectedDate;
-        if (_endDate != null && _endDate!.isBefore(selectedDate)) {
-          _endDate = selectedDate;
-        }
-      } else {
-        _endDate = selectedDate;
-      }
-    });
-  }
-
-  String _formatDate(DateTime? date) {
-    if (date == null) {
-      return 'Pick date';
-    }
-    return DateFormat('MMM d, yyyy').format(date);
-  }
-
   Future<void> _handleCreateAgency() async {
     FocusScope.of(context).unfocus();
 
@@ -7654,20 +7604,6 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
     if (_selectedMemberId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a member to assign')),
-      );
-      return;
-    }
-
-    if (_startDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a start date')),
-      );
-      return;
-    }
-
-    if (_endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an end date')),
       );
       return;
     }
@@ -7721,8 +7657,6 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
         'profileImageUrl': profileImageUrl,
         'assignedMemberId': _selectedMemberId,
         'assignedMemberName': selectedMember.name,
-        'startDate': Timestamp.fromDate(_startDate!),
-        'endDate': Timestamp.fromDate(_endDate!),
         'createdBy': currentUser.uid,
         'createdByName':
             currentUser.displayName ?? currentUser.email ?? 'Unknown',
@@ -8134,100 +8068,6 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
                                                           _selectedMemberId =
                                                               value);
                                                     },
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      SizedBox(
-                                        width: fieldWidth,
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            _buildFieldLabel('Start Time'),
-                                            SizedBox(
-                                              height: 56,
-                                              child: ElevatedButton(
-                                                style: ElevatedButton.styleFrom(
-                                                  elevation: 0,
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            14),
-                                                  ),
-                                                  backgroundColor:
-                                                      const Color(0xFF2563EB),
-                                                  foregroundColor: Colors.white,
-                                                ),
-                                                onPressed: () =>
-                                                    _pickDate(isStart: true),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    const Icon(
-                                                        Icons
-                                                            .calendar_today_outlined,
-                                                        size: 18),
-                                                    const SizedBox(width: 10),
-                                                    Text(
-                                                      _formatDate(_startDate),
-                                                      style: const TextStyle(
-                                                        fontSize: 15,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      SizedBox(
-                                        width: fieldWidth,
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            _buildFieldLabel('End Time'),
-                                            SizedBox(
-                                              height: 56,
-                                              child: ElevatedButton(
-                                                style: ElevatedButton.styleFrom(
-                                                  elevation: 0,
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            14),
-                                                  ),
-                                                  backgroundColor:
-                                                      const Color(0xFF2563EB),
-                                                  foregroundColor: Colors.white,
-                                                ),
-                                                onPressed: () =>
-                                                    _pickDate(isStart: false),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    const Icon(
-                                                        Icons
-                                                            .calendar_today_outlined,
-                                                        size: 18),
-                                                    const SizedBox(width: 10),
-                                                    Text(
-                                                      _formatDate(_endDate),
-                                                      style: const TextStyle(
-                                                        fontSize: 15,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
                                             ),
                                           ],
                                         ),
@@ -9801,9 +9641,11 @@ class _AdminMemberRowData {
       }
     }
 
-    final completedModules = progressData['completedModules'] as List<Map<String, String>>? ?? [];
+    final completedModules =
+        progressData['completedModules'] as List<Map<String, String>>? ?? [];
     final completedCount = completedModules.length;
-    final calculatedProgress = totalModules > 0 ? completedCount / totalModules : 0.0;
+    final calculatedProgress =
+        totalModules > 0 ? completedCount / totalModules : 0.0;
 
     // Extract profile image URL
     final String? profileImageUrl = data['profileImageUrl'] as String? ??
@@ -9981,20 +9823,23 @@ class _AdminMemberManagementViewState
     Map<String, String> coachIdToNameMap,
   ) async {
     final stopwatch = Stopwatch()..start();
-    debugPrint('🚀 Starting optimized progress loading for ${docs.length} members');
-    
+    debugPrint(
+        '🚀 Starting optimized progress loading for ${docs.length} members');
+
     // Batch load all necessary data at once
-    final Map<String, Map<String, dynamic>> progressData = await _batchLoadProgressData(docs);
-    debugPrint('⚡ Batch loading completed in ${stopwatch.elapsedMilliseconds}ms');
-    
+    final Map<String, Map<String, dynamic>> progressData =
+        await _batchLoadProgressData(docs);
+    debugPrint(
+        '⚡ Batch loading completed in ${stopwatch.elapsedMilliseconds}ms');
+
     // Get total modules once
     final totalModules = await _getTotalModulesCount();
-    
+
     // Process members in smaller batches to avoid blocking UI
     const batchSize = 10;
     for (int i = 0; i < docs.length; i += batchSize) {
       final batch = docs.skip(i).take(batchSize).toList();
-      
+
       for (final doc in batch) {
         final memberData = doc.data() as Map<String, dynamic>;
         final bool hasCoachAssignment = assignedMemberIds.contains(doc.id);
@@ -10003,7 +9848,8 @@ class _AdminMemberManagementViewState
         final String? coachName =
             coachId != null ? coachIdToNameMap[coachId] : null;
 
-        final memberWithProgress = _AdminMemberRowData.fromFirestoreWithProgress(
+        final memberWithProgress =
+            _AdminMemberRowData.fromFirestoreWithProgress(
           doc.id,
           memberData,
           progressData[doc.id] ?? {},
@@ -10024,39 +9870,36 @@ class _AdminMemberManagementViewState
           });
         }
       }
-      
+
       // Small delay to allow UI updates
       await Future.delayed(const Duration(milliseconds: 10));
     }
-    
-    debugPrint('✅ Progress loading completed in ${stopwatch.elapsedMilliseconds}ms');
+
+    debugPrint(
+        '✅ Progress loading completed in ${stopwatch.elapsedMilliseconds}ms');
   }
-  
+
   Future<Map<String, Map<String, dynamic>>> _batchLoadProgressData(
-    List<QueryDocumentSnapshot> docs
-  ) async {
+      List<QueryDocumentSnapshot> docs) async {
     final firestore = FirebaseFirestore.instance;
     final Map<String, Map<String, dynamic>> allProgressData = {};
-    
+
     // Batch query for all completions
     final List<Future<QuerySnapshot>> completionFutures = [];
     for (final doc in docs) {
-      completionFutures.add(
-        firestore
-            .collection('users')
-            .doc(doc.id)
-            .collection('completed_courses')
-            .where('topic', whereIn: ['THINK', 'KEEP'])
-            .get()
-      );
+      completionFutures.add(firestore
+          .collection('users')
+          .doc(doc.id)
+          .collection('completed_courses')
+          .where('topic', whereIn: ['THINK', 'KEEP']).get());
     }
-    
+
     final completionSnapshots = await Future.wait(completionFutures);
-    
+
     for (int i = 0; i < docs.length; i++) {
       final doc = docs[i];
       final snapshot = completionSnapshots[i];
-      
+
       final completedModules = <Map<String, String>>[];
       for (final doc in snapshot.docs) {
         final docData = doc.data() as Map<String, dynamic>?;
@@ -10067,22 +9910,21 @@ class _AdminMemberManagementViewState
           });
         }
       }
-      
+
       allProgressData[doc.id] = {
         'completedModules': completedModules,
       };
     }
-    
+
     return allProgressData;
   }
-  
+
   Future<int> _getTotalModulesCount() async {
     try {
       final firestore = FirebaseFirestore.instance;
       final videoSnapshot = await firestore
           .collection('video')
-          .where('topic', whereIn: ['THINK', 'KEEP'])
-          .get();
+          .where('topic', whereIn: ['THINK', 'KEEP']).get();
       return videoSnapshot.docs.length;
     } catch (e) {
       debugPrint('Error getting total modules count: $e');
@@ -10097,7 +9939,7 @@ class _AdminMemberManagementViewState
     try {
       final stopwatch = Stopwatch()..start();
       debugPrint('🚀 Starting optimized average progress calculation');
-      
+
       final firestore = FirebaseFirestore.instance;
 
       // Get total modules once
@@ -10115,30 +9957,29 @@ class _AdminMemberManagementViewState
       // Batch load all completion data
       final List<Future<QuerySnapshot>> completionFutures = [];
       for (final userDoc in usersSnapshot.docs) {
-        completionFutures.add(
-          firestore
-              .collection('users')
-              .doc(userDoc.id)
-              .collection('completed_courses')
-              .where('topic', whereIn: ['THINK', 'KEEP'])
-              .get()
-        );
+        completionFutures.add(firestore
+            .collection('users')
+            .doc(userDoc.id)
+            .collection('completed_courses')
+            .where('topic', whereIn: ['THINK', 'KEEP']).get());
       }
 
       final completionSnapshots = await Future.wait(completionFutures);
-      
+
       double totalProgress = 0.0;
       int userCount = usersSnapshot.docs.length;
 
       for (int i = 0; i < usersSnapshot.docs.length; i++) {
         final completedCount = completionSnapshots[i].docs.length;
-        final userProgress = totalModules > 0 ? completedCount / totalModules : 0.0;
+        final userProgress =
+            totalModules > 0 ? completedCount / totalModules : 0.0;
         totalProgress += userProgress;
       }
 
       final avgProgress = userCount > 0 ? totalProgress / userCount : 0.0;
-      
-      debugPrint('✅ Average progress calculated in ${stopwatch.elapsedMilliseconds}ms');
+
+      debugPrint(
+          '✅ Average progress calculated in ${stopwatch.elapsedMilliseconds}ms');
 
       if (mounted) {
         setState(() {
@@ -11398,8 +11239,9 @@ class _AdminMemberManagementViewState
     final List<_AdminMemberRowData> rows = _getFilteredMembers(_members);
     // Minimum width to ensure all columns are visible
     final double minTableWidth = 900.0;
-    final double tableWidth = maxWidth < minTableWidth ? minTableWidth : maxWidth;
-    
+    final double tableWidth =
+        maxWidth < minTableWidth ? minTableWidth : maxWidth;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -11607,11 +11449,12 @@ class _AdminMemberManagementViewState
         child: IconButton(
           style: IconButton.styleFrom(
             backgroundColor: const Color(0xFFF3F4F6),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           onPressed: () => _showEditMemberDialog(data),
-          icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF4B5563)),
+          icon: const Icon(Icons.edit_outlined,
+              size: 18, color: Color(0xFF4B5563)),
           tooltip: 'Edit Member',
         ),
       ),
@@ -11623,11 +11466,12 @@ class _AdminMemberManagementViewState
         child: IconButton(
           style: IconButton.styleFrom(
             backgroundColor: const Color(0xFFFEE2E2),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           onPressed: () => _showDeleteMemberDialog(data),
-          icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFEF4444)),
+          icon: const Icon(Icons.delete_outline,
+              size: 18, color: Color(0xFFEF4444)),
           tooltip: 'Delete Member',
         ),
       ),
@@ -11644,8 +11488,8 @@ class _AdminMemberManagementViewState
               backgroundColor: const Color(0xFF2563EB),
               foregroundColor: Colors.white,
               elevation: 0,
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             ),
             onPressed: () => _approveMember(data),
@@ -11698,8 +11542,7 @@ class _AdminMemberManagementViewState
               elevation: 0,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             ),
             onPressed: () => _showReassignCoachDialog(data),
             icon: const Icon(Icons.swap_horiz, size: 16),
@@ -11721,8 +11564,7 @@ class _AdminMemberManagementViewState
               elevation: 0,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             ),
             onPressed: () => _openUploadResultsPage(data),
             icon: const Icon(Icons.upload_file, size: 16),
@@ -11764,7 +11606,7 @@ class _AdminMemberManagementViewState
         final userData = userDoc.data()!;
         firstNameController.text = userData['firstName'] as String? ?? '';
         lastNameController.text = userData['lastName'] as String? ?? '';
-        
+
         // Get current agency
         final agencyField = userData['agency'];
         if (agencyField is DocumentReference) {
@@ -11779,12 +11621,15 @@ class _AdminMemberManagementViewState
 
     // Load agencies
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('agencies').get();
+      final snapshot =
+          await FirebaseFirestore.instance.collection('agencies').get();
       agencies = snapshot.docs.map((doc) {
         final docData = doc.data();
         return {
           'id': doc.id,
-          'name': (docData['agency_name'] ?? docData['name'] ?? 'Unknown Agency') as String,
+          'name': (docData['agency_name'] ??
+              docData['name'] ??
+              'Unknown Agency') as String,
         };
       }).toList();
       agencies.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
@@ -11800,7 +11645,8 @@ class _AdminMemberManagementViewState
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Container(
             width: 480,
             padding: const EdgeInsets.all(24),
@@ -11830,7 +11676,8 @@ class _AdminMemberManagementViewState
                   const SizedBox(height: 8),
                   Text(
                     'Update information for ${data.name}',
-                    style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+                    style:
+                        const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
                   ),
                   const SizedBox(height: 24),
                   Row(
@@ -11839,14 +11686,18 @@ class _AdminMemberManagementViewState
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('First Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            const Text('First Name',
+                                style: TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w600)),
                             const SizedBox(height: 6),
                             TextField(
                               controller: firstNameController,
                               decoration: InputDecoration(
                                 hintText: 'First name',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
                               ),
                             ),
                           ],
@@ -11857,14 +11708,18 @@ class _AdminMemberManagementViewState
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Last Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            const Text('Last Name',
+                                style: TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w600)),
                             const SizedBox(height: 6),
                             TextField(
                               controller: lastNameController,
                               decoration: InputDecoration(
                                 hintText: 'Last name',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
                               ),
                             ),
                           ],
@@ -11873,25 +11728,33 @@ class _AdminMemberManagementViewState
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const Text('Email', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Email',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   TextField(
                     controller: emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
                       hintText: 'Email address',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Role', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Role',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     value: selectedRole,
                     decoration: InputDecoration(
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
                     ),
                     items: const [
                       DropdownMenuItem(value: 'Admin', child: Text('Admin')),
@@ -11901,7 +11764,9 @@ class _AdminMemberManagementViewState
                     onChanged: (value) => setState(() => selectedRole = value),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Agency', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Agency',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   loadingAgencies
                       ? Container(
@@ -11912,14 +11777,19 @@ class _AdminMemberManagementViewState
                             border: Border.all(color: const Color(0xFFE5E7EB)),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text('Loading agencies...', style: TextStyle(color: Color(0xFF9CA3AF))),
+                          child: const Text('Loading agencies...',
+                              style: TextStyle(color: Color(0xFF9CA3AF))),
                         )
                       : DropdownButtonFormField<String>(
-                          value: agencies.any((a) => a['id'] == selectedAgency) ? selectedAgency : null,
+                          value: agencies.any((a) => a['id'] == selectedAgency)
+                              ? selectedAgency
+                              : null,
                           decoration: InputDecoration(
                             hintText: 'Select agency',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 12),
                           ),
                           items: agencies.map((agency) {
                             return DropdownMenuItem(
@@ -11927,7 +11797,8 @@ class _AdminMemberManagementViewState
                               child: Text(agency['name']!),
                             );
                           }).toList(),
-                          onChanged: (value) => setState(() => selectedAgency = value),
+                          onChanged: (value) =>
+                              setState(() => selectedAgency = value),
                         ),
                   const SizedBox(height: 24),
                   Row(
@@ -11942,7 +11813,8 @@ class _AdminMemberManagementViewState
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2563EB),
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                         onPressed: () async {
                           try {
@@ -11952,18 +11824,19 @@ class _AdminMemberManagementViewState
                               'email': emailController.text.trim(),
                               'role': selectedRole,
                             };
-                            
-                            if (selectedAgency != null && selectedAgency!.isNotEmpty) {
+
+                            if (selectedAgency != null &&
+                                selectedAgency!.isNotEmpty) {
                               updateData['agency'] = FirebaseFirestore.instance
                                   .collection('agencies')
                                   .doc(selectedAgency);
                             }
-                            
+
                             await FirebaseFirestore.instance
                                 .collection('users')
                                 .doc(data.userId)
                                 .update(updateData);
-                            
+
                             if (context.mounted) {
                               Navigator.of(context).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -12053,9 +11926,12 @@ class _AdminMemberManagementViewState
         // Remove user from any agency's members array
         final agenciesSnapshot = await FirebaseFirestore.instance
             .collection('agencies')
-            .where('members', arrayContains: FirebaseFirestore.instance.collection('users').doc(data.userId))
+            .where('members',
+                arrayContains: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(data.userId))
             .get();
-        
+
         for (final agencyDoc in agenciesSnapshot.docs) {
           await agencyDoc.reference.update({
             'members': FieldValue.arrayRemove([
@@ -14329,7 +14205,8 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
       if (useGCS) {
         // Use GCS for large files
         final storagePath = '$fileType/$fileName';
-        debugPrint('📤 [GCS] Starting upload to $storagePath (type=$contentType, size=${_formatFileSize(file.size)})');
+        debugPrint(
+            '📤 [GCS] Starting upload to $storagePath (type=$contentType, size=${_formatFileSize(file.size)})');
 
         if (file.readStream != null) {
           // Use stream if available (non-web platforms)
@@ -14373,7 +14250,8 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
         if (file.bytes != null) {
           // Use the proper path based on file type (video/ or document/)
           final storagePath = '$fileType/$fileName';
-          debugPrint('📤 [Firebase Storage] Starting upload to $storagePath (type=$contentType, size=${_formatFileSize(file.size)})');
+          debugPrint(
+              '📤 [Firebase Storage] Starting upload to $storagePath (type=$contentType, size=${_formatFileSize(file.size)})');
           final storageRef = FirebaseStorage.instance.ref().child(storagePath);
           final uploadTask = storageRef.putData(
             file.bytes!,
@@ -24022,7 +23900,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   builder: (context) => const WalkthroughSelectionDialog(),
                 );
               },
-              icon: const Icon(Icons.play_circle_outline, size: 20, color: Colors.white),
+              icon: const Icon(Icons.play_circle_outline,
+                  size: 20, color: Colors.white),
               label: const Text('View All Page Walkthroughs'),
             ),
           ),
@@ -24034,7 +23913,8 @@ class _SettingsPageState extends State<SettingsPage> {
             child: OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: SettingsPage._mutedColor,
-                side: const BorderSide(color: SettingsPage._borderColor, width: 1.2),
+                side: const BorderSide(
+                    color: SettingsPage._borderColor, width: 1.2),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 textStyle:
@@ -24044,7 +23924,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 await WalkthroughService().resetAllWalkthroughs();
                 _showSnack('All walkthrough progress has been reset.');
               },
-              icon: const Icon(Icons.refresh_outlined, size: 18, color: SettingsPage._mutedColor),
+              icon: const Icon(Icons.refresh_outlined,
+                  size: 18, color: SettingsPage._mutedColor),
               label: const Text('Reset Walkthrough Progress'),
             ),
           ),
@@ -24886,10 +24767,13 @@ class _TutorialQuickButtonState extends State<_TutorialQuickButton> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: _isHovered ? _accentTeal.withValues(alpha: 0.08) : Colors.white,
+            color:
+                _isHovered ? _accentTeal.withValues(alpha: 0.08) : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: _isHovered ? _accentTeal.withValues(alpha: 0.4) : _borderColor,
+              color: _isHovered
+                  ? _accentTeal.withValues(alpha: 0.4)
+                  : _borderColor,
             ),
           ),
           child: Row(
@@ -33312,8 +33196,7 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
             'user_ref': userRef,
             'user_email': user.email,
             'metric_title': widget.metricTitle,
-            'team_members':
-                _rightPeopleEntries.map((e) => e.toMap()).toList(),
+            'team_members': _rightPeopleEntries.map((e) => e.toMap()).toList(),
             'genius_activities_identified':
                 _geniusActivitiesIdentified.isNotEmpty
                     ? _geniusActivitiesIdentified
@@ -33331,8 +33214,7 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
             'user_ref': userRef,
             'user_email': user.email,
             'metric_title': widget.metricTitle,
-            'weekly_entries':
-                _geniusTimeEntries.map((e) => e.toMap()).toList(),
+            'weekly_entries': _geniusTimeEntries.map((e) => e.toMap()).toList(),
             'monthly_average_hours_per_week': _geniusTimeMonthlyAverage,
             'target_percent': _geniusTimeTargetPercent,
             'actual_percent': _geniusTimeActualPercent,
@@ -33340,9 +33222,8 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
                 _geniusActivitiesIdentified.isNotEmpty
                     ? _geniusActivitiesIdentified
                     : null,
-            'strategies_to_increase': _geniusTimeStrategies.isNotEmpty
-                ? _geniusTimeStrategies
-                : null,
+            'strategies_to_increase':
+                _geniusTimeStrategies.isNotEmpty ? _geniusTimeStrategies : null,
             'submitted_at': FieldValue.serverTimestamp(),
             'status': 'submitted',
           };
@@ -34114,7 +33995,8 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
             label: const Text(
               'Add Team Member',
               style: TextStyle(
-                  color: ScorecardPage._buttonBlue, fontWeight: FontWeight.w600),
+                  color: ScorecardPage._buttonBlue,
+                  fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(height: 24),
@@ -34216,7 +34098,8 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
             label: const Text(
               'Add Week',
               style: TextStyle(
-                  color: ScorecardPage._buttonBlue, fontWeight: FontWeight.w600),
+                  color: ScorecardPage._buttonBlue,
+                  fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(height: 24),
@@ -34542,7 +34425,8 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: TextFormField(
-        initialValue: value.isEmpty || value == '0' || value == '0.0' ? '' : value,
+        initialValue:
+            value.isEmpty || value == '0' || value == '0.0' ? '' : value,
         keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
         decoration: InputDecoration(
           hintText: hintText,
@@ -34774,7 +34658,8 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
         items: options
             .map((opt) => DropdownMenuItem<double>(
                   value: opt,
-                  child: Text(opt % 1 == 0 ? opt.toInt().toString() : opt.toString()),
+                  child: Text(
+                      opt % 1 == 0 ? opt.toInt().toString() : opt.toString()),
                 ))
             .toList(),
         onChanged: onChanged,
@@ -35195,7 +35080,8 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
           isDense: true,
           contentPadding: EdgeInsets.zero,
           hintText: hintText,
-          hintStyle: const TextStyle(color: ScorecardPage._mutedColor, fontSize: 14),
+          hintStyle:
+              const TextStyle(color: ScorecardPage._mutedColor, fontSize: 14),
         ),
         style: const TextStyle(
           color: ScorecardPage._titleColor,
@@ -35232,7 +35118,8 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: value ? ScorecardPage._buttonBlue : ScorecardPage._mutedColor,
+            color:
+                value ? ScorecardPage._buttonBlue : ScorecardPage._mutedColor,
           ),
         ),
       ],
@@ -35687,7 +35574,8 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
                   setState(() => _blueprintMonthlyUtilization = v);
                 }
               },
-              icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF6B7280)),
+              icon: const Icon(Icons.keyboard_arrow_down,
+                  color: Color(0xFF6B7280)),
             ),
           ),
         ),
@@ -35743,7 +35631,8 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
                   setState(() => _blueprintEffectivenessRating = v);
                 }
               },
-              icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF6B7280)),
+              icon: const Icon(Icons.keyboard_arrow_down,
+                  color: Color(0xFF6B7280)),
             ),
           ),
         ),
@@ -37167,10 +37056,10 @@ class _ScoreMetricDetailsPageState extends State<ScoreMetricDetailsPage> {
       child: Row(
         children: [
           _boxed(
-              child: SizedBox(
-                width: 84,
-                child: DropdownButtonFormField<int>(
-                  value: _achievementPct,
+            child: SizedBox(
+              width: 84,
+              child: DropdownButtonFormField<int>(
+                value: _achievementPct,
                 items: List.generate(11, (i) => i * 10)
                     .map((e) => DropdownMenuItem(value: e, child: Text('$e')))
                     .toList(),
@@ -38872,8 +38761,6 @@ class _BreakawayToolsView extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final bool isAdmin;
 
-
-
   int _columnsForWidth(double width) {
     if (width >= 1400) return 4;
     if (width >= 1020) return 3;
@@ -39039,7 +38926,8 @@ class _BreakawayToolsView extends StatelessWidget {
 
       for (var doc in coursesSnapshot.docs) {
         final courseData = doc.data();
-        final courseCard = _FirestoreCourseGrid._mapSnapshot(doc, paletteIndex: courses.length, showContinueButton: false);
+        final courseCard = _FirestoreCourseGrid._mapSnapshot(doc,
+            paletteIndex: courses.length, showContinueButton: false);
         if (courseCard != null) {
           courses.add(courseCard);
         }
@@ -39061,8 +38949,6 @@ class _BreakawayToolsView extends StatelessWidget {
       ),
     );
   }
-
-
 }
 
 class _BreakawayCourseCard extends StatelessWidget {
@@ -39139,29 +39025,35 @@ class _BreakawayCourseCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Row(
-                    children: course.meta.map((meta) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: ContentLibraryPage._borderColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(meta.icon, size: 14, color: ContentLibraryPage._mutedColor),
-                          const SizedBox(width: 4),
-                          Text(
-                            meta.label,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: ContentLibraryPage._mutedColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )).toList(),
+                    children: course.meta
+                        .map((meta) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: ContentLibraryPage._borderColor
+                                    .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(meta.icon,
+                                      size: 14,
+                                      color: ContentLibraryPage._mutedColor),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    meta.label,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: ContentLibraryPage._mutedColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ))
+                        .toList(),
                   ),
                 ],
               ),
@@ -39852,13 +39744,15 @@ class BreakawayToolDetailPage extends StatelessWidget {
 }
 
 class _BreakawayCourseDetailPage extends StatefulWidget {
-  const _BreakawayCourseDetailPage({required this.course, this.isAdmin = false});
+  const _BreakawayCourseDetailPage(
+      {required this.course, this.isAdmin = false});
 
   final _LibraryCardData course;
   final bool isAdmin;
 
   @override
-  State<_BreakawayCourseDetailPage> createState() => _BreakawayCourseDetailPageState();
+  State<_BreakawayCourseDetailPage> createState() =>
+      _BreakawayCourseDetailPageState();
 }
 
 class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
@@ -39885,7 +39779,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
     });
   }
 
-  Future<void> _confirmDeleteVideo(BuildContext context, _LibraryCardData video) async {
+  Future<void> _confirmDeleteVideo(
+      BuildContext context, _LibraryCardData video) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -39903,7 +39798,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
             onPressed: () => Navigator.of(dialogContext).pop(false),
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFF6B7280),
-              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              textStyle:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
             child: const Text('Cancel'),
           ),
@@ -39913,10 +39809,12 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
               backgroundColor: const Color(0xFFEF4444),
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
-            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
+            child: const Text('Delete',
+                style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -39927,27 +39825,28 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
     }
   }
 
-  Future<void> _deleteVideo(BuildContext context, _LibraryCardData video) async {
+  Future<void> _deleteVideo(
+      BuildContext context, _LibraryCardData video) async {
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       final firestore = FirebaseFirestore.instance;
-      
+
       // Delete from video collection (try both 'video' and 'videos')
       try {
         await firestore.collection('video').doc(video.id).delete();
       } catch (_) {
         await firestore.collection('videos').doc(video.id).delete();
       }
-      
+
       // Remove reference from course's videos array
       final courseRef = firestore.collection('courses').doc(widget.course.id);
       final videoRef = firestore.collection('video').doc(video.id);
       final videosRef = firestore.collection('videos').doc(video.id);
-      
+
       await courseRef.update({
         'videos': FieldValue.arrayRemove([videoRef, videosRef, video.id]),
       });
-      
+
       messenger?.showSnackBar(
         SnackBar(
           content: Text('Successfully deleted "${video.title}"'),
@@ -39966,7 +39865,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
     }
   }
 
-  Future<void> _confirmDeleteDocument(BuildContext context, _LibraryCardData doc) async {
+  Future<void> _confirmDeleteDocument(
+      BuildContext context, _LibraryCardData doc) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -39984,7 +39884,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
             onPressed: () => Navigator.of(dialogContext).pop(false),
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFF6B7280),
-              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              textStyle:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
             child: const Text('Cancel'),
           ),
@@ -39994,10 +39895,12 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
               backgroundColor: const Color(0xFFEF4444),
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
-            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
+            child: const Text('Delete',
+                style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -40008,22 +39911,23 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
     }
   }
 
-  Future<void> _deleteDocument(BuildContext context, _LibraryCardData doc) async {
+  Future<void> _deleteDocument(
+      BuildContext context, _LibraryCardData doc) async {
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       final firestore = FirebaseFirestore.instance;
-      
+
       // Delete from documents collection
       await firestore.collection('documents').doc(doc.id).delete();
-      
+
       // Remove reference from course's docs array
       final courseRef = firestore.collection('courses').doc(widget.course.id);
       final docRef = firestore.collection('documents').doc(doc.id);
-      
+
       await courseRef.update({
         'docs': FieldValue.arrayRemove([docRef, doc.id]),
       });
-      
+
       messenger?.showSnackBar(
         SnackBar(
           content: Text('Successfully deleted "${doc.title}"'),
@@ -40049,7 +39953,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
 
     try {
       // Get course document
-      final courseDoc = await firestore.collection('courses').doc(widget.course.id).get();
+      final courseDoc =
+          await firestore.collection('courses').doc(widget.course.id).get();
       if (!courseDoc.exists) return {'videos': videos, 'documents': documents};
 
       final courseData = courseDoc.data() ?? {};
@@ -40064,7 +39969,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
               if (videoDoc.exists) {
                 final videoData = videoDoc.data() as Map<String, dynamic>?;
                 if (videoData != null) {
-                  final card = _mapVideoToCard(videoDoc.id, videoData, videos.length, courseData);
+                  final card = _mapVideoToCard(
+                      videoDoc.id, videoData, videos.length, courseData);
                   if (card != null) videos.add(card);
                 }
               }
@@ -40085,7 +39991,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
               if (docSnapshot.exists) {
                 final docData = docSnapshot.data() as Map<String, dynamic>?;
                 if (docData != null) {
-                  final card = _mapDocumentToCard(docSnapshot.id, docData, documents.length, courseData);
+                  final card = _mapDocumentToCard(
+                      docSnapshot.id, docData, documents.length, courseData);
                   if (card != null) documents.add(card);
                 }
               }
@@ -40095,7 +40002,6 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
           }
         }
       }
-
     } catch (e) {
       debugPrint('Error fetching course content: $e');
     }
@@ -40103,11 +40009,15 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
     return {'videos': videos, 'documents': documents};
   }
 
-  _LibraryCardData? _mapVideoToCard(String id, Map<String, dynamic> data, int index, Map<String, dynamic> courseData) {
-    final title = data['title'] as String? ?? data['video_title'] as String? ?? 'Video';
+  _LibraryCardData? _mapVideoToCard(String id, Map<String, dynamic> data,
+      int index, Map<String, dynamic> courseData) {
+    final title =
+        data['title'] as String? ?? data['video_title'] as String? ?? 'Video';
     final description = data['description'] as String? ?? '';
-    final videoUrl = data['video_url'] as String? ?? data['videoUrl'] as String?;
-    final thumbnailUrl = data['thumbnailUrl'] as String? ?? data['thumbnail'] as String?;
+    final videoUrl =
+        data['video_url'] as String? ?? data['videoUrl'] as String?;
+    final thumbnailUrl =
+        data['thumbnailUrl'] as String? ?? data['thumbnail'] as String?;
     final topic = courseData['topic'] as String?;
 
     return _LibraryCardData(
@@ -40115,7 +40025,9 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
       title: title,
       subtitle: description,
       thumbnailColor: _resolveColor(topic, index),
-      meta: const [_LibraryMetaData(icon: Icons.play_circle_outline, label: 'Video')],
+      meta: const [
+        _LibraryMetaData(icon: Icons.play_circle_outline, label: 'Video')
+      ],
       tags: topic != null ? [topic] : [],
       normalizedTags: topic != null ? [topic.toLowerCase()] : [],
       thumbnailUrl: thumbnailUrl,
@@ -40125,8 +40037,10 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
     );
   }
 
-  _LibraryCardData? _mapDocumentToCard(String id, Map<String, dynamic> data, int index, Map<String, dynamic> courseData) {
-    final title = data['doc_name'] as String? ?? data['title'] as String? ?? 'Document';
+  _LibraryCardData? _mapDocumentToCard(String id, Map<String, dynamic> data,
+      int index, Map<String, dynamic> courseData) {
+    final title =
+        data['doc_name'] as String? ?? data['title'] as String? ?? 'Document';
     final description = data['description'] as String? ?? '';
     final docUrl = data['docUrl'] as String?;
     final topic = courseData['topic'] as String?;
@@ -40136,7 +40050,9 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
       title: title,
       subtitle: description,
       thumbnailColor: _resolveColor(topic, index),
-      meta: const [_LibraryMetaData(icon: Icons.description_outlined, label: 'Document')],
+      meta: const [
+        _LibraryMetaData(icon: Icons.description_outlined, label: 'Document')
+      ],
       tags: topic != null ? [topic] : [],
       normalizedTags: topic != null ? [topic.toLowerCase()] : [],
       showButton: false,
@@ -40147,7 +40063,13 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
 
   Color _resolveColor(String? topic, int index) {
     // Simple color resolution based on index
-    final colors = [Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.red];
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.red
+    ];
     return colors[index % colors.length];
   }
 
@@ -40242,7 +40164,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
     );
   }
 
-  Widget _buildContentList(List<_LibraryCardData> items, {required bool isVideo}) {
+  Widget _buildContentList(List<_LibraryCardData> items,
+      {required bool isVideo}) {
     if (items.isEmpty) {
       return Center(
         child: Column(
@@ -40256,7 +40179,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
             const SizedBox(height: 12),
             Text(
               'No ${isVideo ? 'videos' : 'documents'} available.',
-              style: const TextStyle(color: ContentLibraryPage._mutedColor, fontSize: 15),
+              style: const TextStyle(
+                  color: ContentLibraryPage._mutedColor, fontSize: 15),
             ),
           ],
         ),
@@ -40266,7 +40190,9 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
     return LayoutBuilder(
       builder: (context, constraints) {
         // Responsive: 1 column on narrow, 2 on medium, 3 on wide
-        final crossAxisCount = constraints.maxWidth < 500 ? 1 : (constraints.maxWidth < 900 ? 2 : 3);
+        final crossAxisCount = constraints.maxWidth < 500
+            ? 1
+            : (constraints.maxWidth < 900 ? 2 : 3);
         return GridView.builder(
           padding: const EdgeInsets.all(24),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -40326,12 +40252,14 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
                   fit: StackFit.expand,
                   children: [
                     ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(13)),
                       child: item.thumbnailUrl != null
                           ? Image.network(
                               item.thumbnailUrl!,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _videoPlaceholder(item.thumbnailColor),
+                              errorBuilder: (_, __, ___) =>
+                                  _videoPlaceholder(item.thumbnailColor),
                             )
                           : _videoPlaceholder(item.thumbnailColor),
                     ),
@@ -40339,7 +40267,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
                     Positioned.fill(
                       child: Container(
                         decoration: BoxDecoration(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(13)),
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
@@ -40433,15 +40362,19 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
                           Icon(
                             Icons.play_circle_outline_rounded,
                             size: 14,
-                            color: ContentLibraryPage._mutedColor.withValues(alpha: 0.7),
+                            color: ContentLibraryPage._mutedColor
+                                .withValues(alpha: 0.7),
                           ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              item.subtitle.isNotEmpty ? item.subtitle : 'Watch video',
+                              item.subtitle.isNotEmpty
+                                  ? item.subtitle
+                                  : 'Watch video',
                               style: TextStyle(
                                 fontSize: 11,
-                                color: ContentLibraryPage._mutedColor.withValues(alpha: 0.8),
+                                color: ContentLibraryPage._mutedColor
+                                    .withValues(alpha: 0.8),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -40485,7 +40418,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
   Widget _buildDocumentCard(BuildContext context, _LibraryCardData item) {
     // Determine file type and icon/color
     final fileExt = _getFileExtension(item.downloadUrl ?? item.title);
-    final (IconData icon, Color iconBgColor, Color iconColor) = _getDocIconStyle(fileExt);
+    final (IconData icon, Color iconBgColor, Color iconColor) =
+        _getDocIconStyle(fileExt);
 
     return Material(
       color: Colors.transparent,
@@ -40544,7 +40478,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: iconBgColor,
                             borderRadius: BorderRadius.circular(4),
@@ -40564,7 +40499,8 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
                           Icon(
                             Icons.download_rounded,
                             size: 16,
-                            color: ContentLibraryPage._buttonBlue.withValues(alpha: 0.8),
+                            color: ContentLibraryPage._buttonBlue
+                                .withValues(alpha: 0.8),
                           ),
                         if (widget.isAdmin) ...[
                           const SizedBox(width: 8),
@@ -40611,27 +40547,55 @@ class _BreakawayCourseDetailPageState extends State<_BreakawayCourseDetailPage>
   (IconData, Color, Color) _getDocIconStyle(String ext) {
     switch (ext) {
       case 'pdf':
-        return (Icons.picture_as_pdf_rounded, const Color(0xFFFEE2E2), const Color(0xFFDC2626));
+        return (
+          Icons.picture_as_pdf_rounded,
+          const Color(0xFFFEE2E2),
+          const Color(0xFFDC2626)
+        );
       case 'doc':
       case 'docx':
-        return (Icons.description_rounded, const Color(0xFFDBEAFE), const Color(0xFF2563EB));
+        return (
+          Icons.description_rounded,
+          const Color(0xFFDBEAFE),
+          const Color(0xFF2563EB)
+        );
       case 'xls':
       case 'xlsx':
-        return (Icons.table_chart_rounded, const Color(0xFFDCFCE7), const Color(0xFF16A34A));
+        return (
+          Icons.table_chart_rounded,
+          const Color(0xFFDCFCE7),
+          const Color(0xFF16A34A)
+        );
       case 'ppt':
       case 'pptx':
-        return (Icons.slideshow_rounded, const Color(0xFFFEF3C7), const Color(0xFFD97706));
+        return (
+          Icons.slideshow_rounded,
+          const Color(0xFFFEF3C7),
+          const Color(0xFFD97706)
+        );
       case 'jpg':
       case 'jpeg':
       case 'png':
       case 'gif':
-        return (Icons.image_rounded, const Color(0xFFF3E8FF), const Color(0xFF9333EA));
+        return (
+          Icons.image_rounded,
+          const Color(0xFFF3E8FF),
+          const Color(0xFF9333EA)
+        );
       case 'mp4':
       case 'mov':
       case 'avi':
-        return (Icons.video_file_rounded, const Color(0xFFE0E7FF), const Color(0xFF4F46E5));
+        return (
+          Icons.video_file_rounded,
+          const Color(0xFFE0E7FF),
+          const Color(0xFF4F46E5)
+        );
       default:
-        return (Icons.insert_drive_file_rounded, const Color(0xFFF3F4F6), const Color(0xFF6B7280));
+        return (
+          Icons.insert_drive_file_rounded,
+          const Color(0xFFF3F4F6),
+          const Color(0xFF6B7280)
+        );
     }
   }
 
@@ -42137,11 +42101,15 @@ class _FirestoreCourseGrid extends StatelessWidget {
             // Normalize topic for comparison - treat 'null' string as actual null
             String? topicNormalized = topic?.toLowerCase().trim();
             String? badgeNormalized = badge?.toLowerCase().trim();
-            
+
             // Filter out items with null, empty, or 'null' string topics when filtering by specific category
-            if (topicNormalized == null || topicNormalized.isEmpty || topicNormalized == 'null') {
+            if (topicNormalized == null ||
+                topicNormalized.isEmpty ||
+                topicNormalized == 'null') {
               // Check if badge matches before excluding
-              if (badgeNormalized == null || badgeNormalized.isEmpty || badgeNormalized == 'null') {
+              if (badgeNormalized == null ||
+                  badgeNormalized.isEmpty ||
+                  badgeNormalized == 'null') {
                 continue; // Skip items without valid topic or badge
               }
             }
@@ -42149,17 +42117,29 @@ class _FirestoreCourseGrid extends StatelessWidget {
             bool matchesTopicFilter = false;
 
             // Check if topic matches the filter exactly
-            if (topicNormalized != null && topicNormalized != 'null' && topicNormalized == normalizedFilter) {
+            if (topicNormalized != null &&
+                topicNormalized != 'null' &&
+                topicNormalized == normalizedFilter) {
               matchesTopicFilter = true;
-            } else if (badgeNormalized != null && badgeNormalized != 'null' && badgeNormalized == normalizedFilter) {
+            } else if (badgeNormalized != null &&
+                badgeNormalized != 'null' &&
+                badgeNormalized == normalizedFilter) {
               matchesTopicFilter = true;
             } else if (normalizedFilter == 'expert series' &&
-                ((badgeNormalized != null && badgeNormalized != 'null' && badgeNormalized.contains('expert')) ||
-                    (topicNormalized != null && topicNormalized != 'null' && topicNormalized.contains('expert')))) {
+                ((badgeNormalized != null &&
+                        badgeNormalized != 'null' &&
+                        badgeNormalized.contains('expert')) ||
+                    (topicNormalized != null &&
+                        topicNormalized != 'null' &&
+                        topicNormalized.contains('expert')))) {
               matchesTopicFilter = true;
             } else if (normalizedFilter == 'immersive footage' &&
-                ((topicNormalized != null && topicNormalized != 'null' && topicNormalized.contains('immersive')) ||
-                    (badgeNormalized != null && badgeNormalized != 'null' && badgeNormalized.contains('immersive')))) {
+                ((topicNormalized != null &&
+                        topicNormalized != 'null' &&
+                        topicNormalized.contains('immersive')) ||
+                    (badgeNormalized != null &&
+                        badgeNormalized != 'null' &&
+                        badgeNormalized.contains('immersive')))) {
               matchesTopicFilter = true;
             }
 
@@ -42748,8 +42728,8 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
             _adminDisplayName = user.email ?? 'Admin';
           }
           _adminRoleLabel = role;
-          _adminProfileImageUrl = data['profileImageUrl'] as String? ??
-              data['photoURL'] as String?;
+          _adminProfileImageUrl =
+              data['profileImageUrl'] as String? ?? data['photoURL'] as String?;
         });
       }
     } catch (e) {
@@ -43225,9 +43205,7 @@ class _DocumentsButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isLoading 
-              ? const Color(0xFFF1F5F9)
-              : const Color(0xFFEFF6FF),
+          color: isLoading ? const Color(0xFFF1F5F9) : const Color(0xFFEFF6FF),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: const Color(0xFFDBEAFE),
@@ -43239,18 +43217,17 @@ class _DocumentsButton extends StatelessWidget {
           children: [
             Icon(
               Icons.description_outlined,
-              color: isLoading 
-                  ? const Color(0xFF94A3B8)
-                  : const Color(0xFF3B82F6),
+              color:
+                  isLoading ? const Color(0xFF94A3B8) : const Color(0xFF3B82F6),
               size: 14,
             ),
             const SizedBox(width: 4),
             Text(
-              isLoading 
+              isLoading
                   ? 'Loading...'
                   : '$documentCount ${documentCount == 1 ? "Document" : "Documents"}',
               style: TextStyle(
-                color: isLoading 
+                color: isLoading
                     ? const Color(0xFF94A3B8)
                     : const Color(0xFF3B82F6),
                 fontSize: 11,
@@ -43361,7 +43338,8 @@ class _DocumentsDialog extends StatelessWidget {
                   ),
                   itemBuilder: (context, index) {
                     final document = documents[index];
-                    final docName = document['doc_name'] as String? ?? 'Untitled Document';
+                    final docName =
+                        document['doc_name'] as String? ?? 'Untitled Document';
                     final docUrl = document['docUrl'] as String?;
 
                     return _DocumentTile(
@@ -43378,7 +43356,8 @@ class _DocumentsDialog extends StatelessWidget {
     );
   }
 
-  Future<void> _downloadDocument(String docName, String? docUrl, BuildContext context) async {
+  Future<void> _downloadDocument(
+      String docName, String? docUrl, BuildContext context) async {
     if (docUrl == null || docUrl.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -43391,10 +43370,12 @@ class _DocumentsDialog extends StatelessWidget {
     try {
       if (kIsWeb) {
         // For web, open in new tab
-        await launchUrl(Uri.parse(docUrl), mode: LaunchMode.externalApplication);
+        await launchUrl(Uri.parse(docUrl),
+            mode: LaunchMode.externalApplication);
       } else {
         // For mobile/desktop, use url_launcher
-        await launchUrl(Uri.parse(docUrl), mode: LaunchMode.externalApplication);
+        await launchUrl(Uri.parse(docUrl),
+            mode: LaunchMode.externalApplication);
       }
     } catch (e) {
       debugPrint('❌ Error downloading document: $e');
@@ -43431,14 +43412,14 @@ class _DocumentTile extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: docUrl != null 
+                color: docUrl != null
                     ? const Color(0xFFEFF6FF)
                     : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 Icons.insert_drive_file_outlined,
-                color: docUrl != null 
+                color: docUrl != null
                     ? const Color(0xFF3B82F6)
                     : const Color(0xFF94A3B8),
                 size: 20,
@@ -43452,7 +43433,7 @@ class _DocumentTile extends StatelessWidget {
                   Text(
                     docName,
                     style: TextStyle(
-                      color: docUrl != null 
+                      color: docUrl != null
                           ? const Color(0xFF1E293B)
                           : const Color(0xFF64748B),
                       fontSize: 14,
@@ -43715,7 +43696,7 @@ class _ModulesPanelState extends State<_ModulesPanel> {
 
       final courseData = courseDoc.data() ?? {};
       final docsField = courseData['docs'];
-      
+
       List<String> documentIds = [];
       if (docsField is List) {
         for (final item in docsField) {
@@ -43728,11 +43709,12 @@ class _ModulesPanelState extends State<_ModulesPanel> {
       }
 
       final List<Map<String, dynamic>> fetchedDocuments = [];
-      
+
       // Fetch documents from the 'document' collection
       if (documentIds.isNotEmpty) {
-        final documentsCollection = FirebaseFirestore.instance.collection('document');
-        
+        final documentsCollection =
+            FirebaseFirestore.instance.collection('document');
+
         for (final docId in documentIds) {
           try {
             final doc = await documentsCollection.doc(docId).get();
@@ -43746,13 +43728,15 @@ class _ModulesPanelState extends State<_ModulesPanel> {
               });
             }
           } catch (e) {
-            debugPrint('❌ Course Documents: Error fetching document $docId: $e');
+            debugPrint(
+                '❌ Course Documents: Error fetching document $docId: $e');
           }
         }
       }
 
-      debugPrint('📄 Course Documents: Loaded ${fetchedDocuments.length} documents');
-      
+      debugPrint(
+          '📄 Course Documents: Loaded ${fetchedDocuments.length} documents');
+
       if (mounted) {
         setState(() {
           _documents = fetchedDocuments;
@@ -43996,43 +43980,43 @@ class _ModulesPanelState extends State<_ModulesPanel> {
                       ),
                     ],
                   ),
-),
-                 Row(
-                   children: [
-                     if (!_isLoadingVideos && displayModules.isNotEmpty)
-                       Container(
-                         padding:
-                             const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                         decoration: BoxDecoration(
-                           color: const Color(0xFFDCFCE7),
-                           borderRadius: BorderRadius.circular(8),
-                         ),
-                         child: Row(
-                           mainAxisSize: MainAxisSize.min,
-                           children: [
-                             Icon(Icons.check_circle,
-                                 color: const Color(0xFF16A34A), size: 14),
-                             const SizedBox(width: 4),
-                             Text(
-                               'Ready',
-                               style: TextStyle(
-                                 color: const Color(0xFF16A34A),
-                                 fontSize: 11,
-                                 fontWeight: FontWeight.w600,
-                               ),
-                             ),
-                           ],
-                         ),
-                       ),
-                     const SizedBox(width: 8),
-                     // Documents button
-                     _DocumentsButton(
-                       documentCount: _documents.length,
-                       isLoading: _isLoadingDocuments,
-                       onTap: _showDocumentsDialog,
-                     ),
-                   ],
-                 ),
+                ),
+                Row(
+                  children: [
+                    if (!_isLoadingVideos && displayModules.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDCFCE7),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle,
+                                color: const Color(0xFF16A34A), size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Ready',
+                              style: TextStyle(
+                                color: const Color(0xFF16A34A),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(width: 8),
+                    // Documents button
+                    _DocumentsButton(
+                      documentCount: _documents.length,
+                      isLoading: _isLoadingDocuments,
+                      onTap: _showDocumentsDialog,
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -49341,9 +49325,9 @@ class _ProfileNotificationsContent extends StatelessWidget {
                         'chatId': doc.id,
                         'actorName': data['lastSenderName'],
                       });
-}
-    }
-  }
+                    }
+                  }
+                }
 
                 // Sort all items by date
                 allItems.sort((a, b) => (b['createdAt'] as DateTime)
@@ -50957,14 +50941,17 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
       if (doc.exists && mounted) {
         final data = doc.data()!;
         setState(() {
-          _platformNameController.text = data['platformName'] as String? ?? 'Breakaway365';
+          _platformNameController.text =
+              data['platformName'] as String? ?? 'Breakaway365';
           _supportEmailController.text = data['supportEmail'] as String? ?? '';
-          _allowSelfRegistration = data['allowSelfRegistration'] as bool? ?? true;
+          _allowSelfRegistration =
+              data['allowSelfRegistration'] as bool? ?? true;
           _defaultUserRole = data['defaultUserRole'] as String? ?? 'Member';
           _autoPlayVideos = data['autoPlayVideos'] as bool? ?? true;
           _sessionTimeoutMinutes = data['sessionTimeoutMinutes'] as int? ?? 60;
           _maintenanceMode = data['maintenanceMode'] as bool? ?? false;
-          _requireEmailVerification = data['requireEmailVerification'] as bool? ?? false;
+          _requireEmailVerification =
+              data['requireEmailVerification'] as bool? ?? false;
           _isLoadingGeneral = false;
         });
       } else {
@@ -51010,7 +50997,8 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
             ),
             backgroundColor: AdminSystemSettingsPage._successGreen,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
@@ -51923,8 +51911,10 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        AdminSystemSettingsPage._accentBlue.withValues(alpha: 0.1),
-                        AdminSystemSettingsPage._accentBlue.withValues(alpha: 0.05),
+                        AdminSystemSettingsPage._accentBlue
+                            .withValues(alpha: 0.1),
+                        AdminSystemSettingsPage._accentBlue
+                            .withValues(alpha: 0.05),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(14),
@@ -52078,7 +52068,8 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
                       : 'Users can access content immediately after signup',
                   icon: Icons.mark_email_read_rounded,
                   value: _requireEmailVerification,
-                  onChanged: (v) => setState(() => _requireEmailVerification = v),
+                  onChanged: (v) =>
+                      setState(() => _requireEmailVerification = v),
                 ),
                 const SizedBox(height: 20),
                 _buildDropdownSetting(
@@ -52087,7 +52078,8 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
                   icon: Icons.security_rounded,
                   value: _defaultUserRole,
                   options: const ['Member', 'Coach'],
-                  onChanged: (v) => setState(() => _defaultUserRole = v ?? 'Member'),
+                  onChanged: (v) =>
+                      setState(() => _defaultUserRole = v ?? 'Member'),
                 ),
               ],
             ),
@@ -52180,14 +52172,16 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
                 const SizedBox(height: 20),
                 _buildSliderSetting(
                   title: 'Session Timeout',
-                  subtitle: 'Inactive users will be logged out after $_sessionTimeoutMinutes minutes',
+                  subtitle:
+                      'Inactive users will be logged out after $_sessionTimeoutMinutes minutes',
                   icon: Icons.timer_rounded,
                   value: _sessionTimeoutMinutes.toDouble(),
                   min: 15,
                   max: 240,
                   divisions: 15,
                   label: '$_sessionTimeoutMinutes min',
-                  onChanged: (v) => setState(() => _sessionTimeoutMinutes = v.round()),
+                  onChanged: (v) =>
+                      setState(() => _sessionTimeoutMinutes = v.round()),
                 ),
               ],
             ),
@@ -52204,8 +52198,8 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: _maintenanceMode 
-              ? Colors.orange.withValues(alpha: 0.5) 
+          color: _maintenanceMode
+              ? Colors.orange.withValues(alpha: 0.5)
               : AdminSystemSettingsPage._borderColor,
         ),
         boxShadow: [
@@ -52228,17 +52222,25 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        (_maintenanceMode ? Colors.orange : const Color(0xFFEF4444))
+                        (_maintenanceMode
+                                ? Colors.orange
+                                : const Color(0xFFEF4444))
                             .withValues(alpha: 0.1),
-                        (_maintenanceMode ? Colors.orange : const Color(0xFFEF4444))
+                        (_maintenanceMode
+                                ? Colors.orange
+                                : const Color(0xFFEF4444))
                             .withValues(alpha: 0.05),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
-                    _maintenanceMode ? Icons.engineering_rounded : Icons.power_settings_new_rounded,
-                    color: _maintenanceMode ? Colors.orange : const Color(0xFFEF4444),
+                    _maintenanceMode
+                        ? Icons.engineering_rounded
+                        : Icons.power_settings_new_rounded,
+                    color: _maintenanceMode
+                        ? Colors.orange
+                        : const Color(0xFFEF4444),
                     size: 22,
                   ),
                 ),
@@ -52267,11 +52269,13 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: _maintenanceMode
                         ? Colors.orange.withValues(alpha: 0.1)
-                        : AdminSystemSettingsPage._successGreen.withValues(alpha: 0.1),
+                        : AdminSystemSettingsPage._successGreen
+                            .withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -52329,7 +52333,8 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                  Icon(Icons.warning_amber_rounded,
+                      color: Colors.orange, size: 20),
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -52383,10 +52388,12 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
             ),
             filled: true,
             fillColor: const Color(0xFFF9FAFB),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AdminSystemSettingsPage._borderColor),
+              borderSide:
+                  const BorderSide(color: AdminSystemSettingsPage._borderColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -52409,7 +52416,8 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
     required ValueChanged<bool> onChanged,
     Color? activeColor,
   }) {
-    final effectiveActiveColor = activeColor ?? AdminSystemSettingsPage._successGreen;
+    final effectiveActiveColor =
+        activeColor ?? AdminSystemSettingsPage._successGreen;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -52435,7 +52443,9 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
             ),
             child: Icon(
               icon,
-              color: value ? effectiveActiveColor : AdminSystemSettingsPage._mutedColor,
+              color: value
+                  ? effectiveActiveColor
+                  : AdminSystemSettingsPage._mutedColor,
               size: 20,
             ),
           ),
@@ -52545,10 +52555,12 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
-                items: options.map((opt) => DropdownMenuItem(
-                  value: opt,
-                  child: Text(opt),
-                )).toList(),
+                items: options
+                    .map((opt) => DropdownMenuItem(
+                          value: opt,
+                          child: Text(opt),
+                        ))
+                    .toList(),
                 onChanged: onChanged,
               ),
             ),
@@ -52618,9 +52630,11 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AdminSystemSettingsPage._accentBlue.withValues(alpha: 0.1),
+                  color: AdminSystemSettingsPage._accentBlue
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -52640,7 +52654,8 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
               activeTrackColor: AdminSystemSettingsPage._accentBlue,
               inactiveTrackColor: AdminSystemSettingsPage._borderColor,
               thumbColor: AdminSystemSettingsPage._accentBlue,
-              overlayColor: AdminSystemSettingsPage._accentBlue.withValues(alpha: 0.1),
+              overlayColor:
+                  AdminSystemSettingsPage._accentBlue.withValues(alpha: 0.1),
               trackHeight: 6,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
             ),
@@ -52689,7 +52704,8 @@ class _AdminSystemSettingsPageState extends State<AdminSystemSettingsPage> {
           backgroundColor: AdminSystemSettingsPage._accentBlue,
           foregroundColor: Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         child: _isSavingGeneral
