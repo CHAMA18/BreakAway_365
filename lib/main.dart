@@ -4933,20 +4933,32 @@ class _AuthCardState extends State<_AuthCard> {
       return fallbackEmail ?? 'Admin';
     }
 
-    final displayName = (profile['displayName'] as String?)?.trim();
-    if (displayName != null && displayName.isNotEmpty) {
-      return displayName;
-    }
-
-    final String? firstName = (profile['firstName'] as String?)?.trim();
-    final String? lastName = (profile['lastName'] as String?)?.trim();
-    final List<String> nameParts = [
-      if (firstName != null && firstName.isNotEmpty) firstName,
-      if (lastName != null && lastName.isNotEmpty) lastName,
+    final candidates = [
+      profile['display_name'],
+      profile['displayName'],
+      profile['fullName'],
+      profile['name'],
+      profile['firstName'] != null || profile['lastName'] != null
+          ? [profile['firstName'], profile['lastName']]
+              .where((s) => s != null && s.toString().trim().isNotEmpty)
+              .join(' ')
+              .trim()
+          : null,
+      profile['first_name'] != null || profile['last_name'] != null
+          ? [profile['first_name'], profile['last_name']]
+              .where((s) => s != null && s.toString().trim().isNotEmpty)
+              .join(' ')
+              .trim()
+          : null,
+      profile['username'],
     ];
 
-    if (nameParts.isNotEmpty) {
-      return nameParts.join(' ');
+    for (final candidate in candidates) {
+      if (candidate != null &&
+          candidate is String &&
+          candidate.trim().isNotEmpty) {
+        return candidate.trim();
+      }
     }
 
     final agencyName = (profile['agencyName'] as String?)?.trim();
@@ -7513,6 +7525,12 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
       data['display_name'],
       data['fullName'],
       data['name'],
+      data['firstName'] != null || data['lastName'] != null
+          ? [data['firstName'], data['lastName']]
+              .where((s) => s != null && s.toString().trim().isNotEmpty)
+              .join(' ')
+              .trim()
+          : null,
       data['first_name'] != null || data['last_name'] != null
           ? [data['first_name'], data['last_name']]
               .whereType<String>()
@@ -9594,14 +9612,43 @@ class _AdminMemberRowData {
     String? agencyName,
     String? coachName,
   }) async {
-    final String firstName = data['firstName'] as String? ?? '';
-    final String lastName = data['lastName'] as String? ?? '';
-    final String displayName = data['display_name'] as String? ??
-        data['displayName'] as String? ??
-        data['username'] as String? ??
-        '';
-    final String name =
-        displayName.isNotEmpty ? displayName : '$firstName $lastName'.trim();
+    // --- ROBUST NAME RESOLUTION START ---
+    final candidates = [
+      data['display_name'],
+      data['fullName'],
+      data['name'],
+      data['firstName'] != null || data['lastName'] != null
+          ? [data['firstName'], data['lastName']]
+              .where((s) => s != null && s.toString().trim().isNotEmpty)
+              .join(' ')
+              .trim()
+          : null,
+      data['first_name'] != null || data['last_name'] != null
+          ? [data['first_name'], data['last_name']]
+              .where((s) => s != null && s.toString().trim().isNotEmpty)
+              .join(' ')
+              .trim()
+          : null,
+      data['username'],
+    ];
+
+    String name = '';
+    for (final candidate in candidates) {
+      if (candidate != null &&
+          candidate is String &&
+          candidate.trim().isNotEmpty) {
+        name = candidate.trim();
+        break;
+      }
+    }
+    if (name.isEmpty) {
+      debugPrint(
+          '⚠️ _AdminMemberRowData: Name resolution failed for user $userId. Data keys: ${data.keys.toList()}');
+      name = 'Unnamed User';
+    } else {
+      debugPrint('✅ _AdminMemberRowData: Resolved name "$name" for user $userId');
+    }
+    // --- ROBUST NAME RESOLUTION END ---
 
     final String role = (data['role'] as String? ?? 'Member').trim();
     final bool approved = data['isApproved'] as bool? ??
@@ -9732,14 +9779,39 @@ class _AdminMemberRowData {
     String? agencyName,
     String? coachName,
   }) {
-    final String firstName = data['firstName'] as String? ?? '';
-    final String lastName = data['lastName'] as String? ?? '';
-    final String displayName = data['display_name'] as String? ??
-        data['displayName'] as String? ??
-        data['username'] as String? ??
-        '';
-    final String name =
-        displayName.isNotEmpty ? displayName : '$firstName $lastName'.trim();
+    // --- ROBUST NAME RESOLUTION START ---
+    final candidates = [
+      data['display_name'],
+      data['fullName'],
+      data['name'],
+      data['firstName'] != null || data['lastName'] != null
+          ? [data['firstName'], data['lastName']]
+              .where((s) => s != null && s.toString().trim().isNotEmpty)
+              .join(' ')
+              .trim()
+          : null,
+      data['first_name'] != null || data['last_name'] != null
+          ? [data['first_name'], data['last_name']]
+              .where((s) => s != null && s.toString().trim().isNotEmpty)
+              .join(' ')
+              .trim()
+          : null,
+      data['username'],
+    ];
+
+    String name = '';
+    for (final candidate in candidates) {
+      if (candidate != null &&
+          candidate is String &&
+          candidate.trim().isNotEmpty) {
+        name = candidate.trim();
+        break;
+      }
+    }
+    if (name.isEmpty) {
+      name = 'Unnamed User';
+    }
+    // --- ROBUST NAME RESOLUTION END ---
 
     final String role = (data['role'] as String? ?? 'Member').trim();
     final bool approved = data['isApproved'] as bool? ??
@@ -9819,14 +9891,44 @@ class _AdminMemberRowData {
     String? agencyName,
     String? coachName,
   }) {
-    final String firstName = data['firstName'] as String? ?? '';
-    final String lastName = data['lastName'] as String? ?? '';
-    final String displayName = data['display_name'] as String? ??
-        data['displayName'] as String? ??
-        data['username'] as String? ??
-        '';
-    final String name =
-        displayName.isNotEmpty ? displayName : '$firstName $lastName'.trim();
+    // --- ROBUST NAME RESOLUTION START ---
+    final candidates = [
+      data['display_name'],
+      data['fullName'],
+      data['name'],
+      data['firstName'] != null || data['lastName'] != null
+          ? [data['firstName'], data['lastName']]
+              .where((s) => s != null && s.toString().trim().isNotEmpty)
+              .join(' ')
+              .trim()
+          : null,
+      data['first_name'] != null || data['last_name'] != null
+          ? [data['first_name'], data['last_name']]
+              .where((s) => s != null && s.toString().trim().isNotEmpty)
+              .join(' ')
+              .trim()
+          : null,
+      data['username'],
+    ];
+
+    String name = '';
+    for (final candidate in candidates) {
+      if (candidate != null &&
+          candidate is String &&
+          candidate.trim().isNotEmpty) {
+        name = candidate.trim();
+        break;
+      }
+    }
+    if (name.isEmpty) {
+      debugPrint(
+          '⚠️ _AdminMemberRowData.fromFirestore: Name resolution failed for user $userId. Data keys: ${data.keys.toList()}');
+      name = 'Unnamed User';
+    } else {
+      debugPrint(
+          '✅ _AdminMemberRowData.fromFirestore: Resolved name "$name" for user $userId');
+    }
+    // --- ROBUST NAME RESOLUTION END ---
 
     final String role = (data['role'] as String? ?? 'Member').trim();
     final bool approved = data['isApproved'] as bool? ??
@@ -9867,9 +9969,9 @@ class _AdminMemberRowData {
 
     final _AdminMemberActionType actionType = !approved
         ? _AdminMemberActionType.approve
-        : (approved && !hasCoachAssignment && role.toLowerCase() == 'member'
+        : (approved && !hasCoachAssignment && role.toLowerCase() == 'member')
             ? _AdminMemberActionType.assignCoach
-            : _AdminMemberActionType.assignCoach);
+            : _AdminMemberActionType.none;
 
     final bool hasSecondaryAction =
         resolvedAgencyName.toLowerCase() == 'add to agency' ||
@@ -9942,6 +10044,7 @@ class _AdminMemberManagementViewState
   String? _appliedAgencyFilter;
   double _computedAverageProgress = 0.0;
   bool _isLoadingProgress = false;
+  Set<String> _loadedMemberIds = {};
 
   @override
   void initState() {
@@ -9957,61 +10060,77 @@ class _AdminMemberManagementViewState
     Map<String, String> memberToCoachMap,
     Map<String, String> coachIdToNameMap,
   ) async {
+    if (_isLoadingProgress) return;
+    
+    final currentIds = docs.map((d) => d.id).toSet();
+    if (_loadedMemberIds.length == currentIds.length && _loadedMemberIds.containsAll(currentIds)) {
+      return; 
+    }
+
+    _isLoadingProgress = true;
+    _loadedMemberIds = currentIds;
+
     final stopwatch = Stopwatch()..start();
     debugPrint(
         '🚀 Starting optimized progress loading for ${docs.length} members');
 
     // Batch load all necessary data at once
-    final Map<String, Map<String, dynamic>> progressData =
-        await _batchLoadProgressData(docs);
-    debugPrint(
-        '⚡ Batch loading completed in ${stopwatch.elapsedMilliseconds}ms');
+    try {
+      final Map<String, Map<String, dynamic>> progressData =
+          await _batchLoadProgressData(docs);
+      debugPrint(
+          '⚡ Batch loading completed in ${stopwatch.elapsedMilliseconds}ms');
 
-    // Get total modules once
-    final totalModules = await _getTotalModulesCount();
+      // Get total modules once
+      final totalModules = await _getTotalModulesCount();
 
-    // Process members in smaller batches to avoid blocking UI
-    const batchSize = 10;
-    for (int i = 0; i < docs.length; i += batchSize) {
-      final batch = docs.skip(i).take(batchSize).toList();
+      // Process members in smaller batches to avoid blocking UI
+      const batchSize = 10;
+      for (int i = 0; i < docs.length; i += batchSize) {
+        final batch = docs.skip(i).take(batchSize).toList();
 
-      for (final doc in batch) {
-        final memberData = doc.data() as Map<String, dynamic>;
-        final bool hasCoachAssignment = assignedMemberIds.contains(doc.id);
-        final String? agencyFromMap = userAgencyMap[doc.id];
-        final String? coachId = memberToCoachMap[doc.id];
-        final String? coachName =
-            coachId != null ? coachIdToNameMap[coachId] : null;
+        for (final doc in batch) {
+          final memberData = doc.data() as Map<String, dynamic>;
+          final bool hasCoachAssignment = assignedMemberIds.contains(doc.id);
+          final String? agencyFromMap = userAgencyMap[doc.id];
+          final String? coachId = memberToCoachMap[doc.id];
+          final String? coachName =
+              coachId != null ? coachIdToNameMap[coachId] : null;
 
-        final memberWithProgress =
-            _AdminMemberRowData.fromFirestoreWithProgress(
-          doc.id,
-          memberData,
-          progressData[doc.id] ?? {},
-          totalModules,
-          hasCoachAssignment: hasCoachAssignment,
-          agencyName: agencyFromMap,
-          coachName: coachName,
-        );
+          final memberWithProgress =
+              _AdminMemberRowData.fromFirestoreWithProgress(
+            doc.id,
+            memberData,
+            progressData[doc.id] ?? {},
+            totalModules,
+            hasCoachAssignment: hasCoachAssignment,
+            agencyName: agencyFromMap,
+            coachName: coachName,
+          );
 
-        if (mounted) {
-          setState(() {
-            _membersWithProgress[doc.id] = memberWithProgress;
-            // Update the member in the main list
-            final index = _members.indexWhere((m) => m.userId == doc.id);
-            if (index != -1) {
-              _members[index] = memberWithProgress;
-            }
-          });
+          if (mounted) {
+            setState(() {
+              _membersWithProgress[doc.id] = memberWithProgress;
+              // Update the member in the main list
+              final index = _members.indexWhere((m) => m.userId == doc.id);
+              if (index != -1) {
+                _members[index] = memberWithProgress;
+              }
+            });
+          }
         }
+
+        // Small delay to allow UI updates
+        await Future.delayed(const Duration(milliseconds: 10));
       }
 
-      // Small delay to allow UI updates
-      await Future.delayed(const Duration(milliseconds: 10));
+      debugPrint(
+          '✅ Progress loading completed in ${stopwatch.elapsedMilliseconds}ms');
+    } catch (e) {
+      debugPrint('❌ Error in _loadMemberProgress: $e');
+    } finally {
+      _isLoadingProgress = false;
     }
-
-    debugPrint(
-        '✅ Progress loading completed in ${stopwatch.elapsedMilliseconds}ms');
   }
 
   Future<Map<String, Map<String, dynamic>>> _batchLoadProgressData(
@@ -11372,11 +11491,6 @@ class _AdminMemberManagementViewState
 
   Widget _buildMemberTable(double maxWidth) {
     final List<_AdminMemberRowData> rows = _getFilteredMembers(_members);
-    // Minimum width to ensure all columns are visible
-    final double minTableWidth = 900.0;
-    final double tableWidth =
-        maxWidth < minTableWidth ? minTableWidth : maxWidth;
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -11386,33 +11500,26 @@ class _AdminMemberManagementViewState
               color: Color(0x0A1E293B), blurRadius: 12, offset: Offset(0, 4)),
         ],
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: tableWidth),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildHeaderRow(),
-              const Divider(height: 1, color: Color(0xFFE5E7EB)),
-              if (rows.isEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 40),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    'No members found for this view.',
-                    style: TextStyle(
-                        color: Color(0xFF6B7280),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500),
-                  ),
-                )
-              else
-                ...rows.map(_buildMemberRow),
-            ],
-          ),
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildHeaderRow(),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          if (rows.isEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              alignment: Alignment.center,
+              child: const Text(
+                'No members found for this view.',
+                style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500),
+              ),
+            )
+          else
+            ...rows.map(_buildMemberRow),
+        ],
       ),
     );
   }
@@ -11425,10 +11532,10 @@ class _AdminMemberManagementViewState
       letterSpacing: 0.6,
     );
 
-    Widget buildCell(String label, double width,
-        {Alignment alignment = Alignment.centerLeft}) {
-      return SizedBox(
-        width: width,
+    Widget buildCell(String label,
+        {int flex = 1, Alignment alignment = Alignment.centerLeft}) {
+      return Expanded(
+        flex: flex,
         child: Align(
           alignment: alignment,
           child: Text(label.toUpperCase(), style: headerStyle),
@@ -11444,11 +11551,11 @@ class _AdminMemberManagementViewState
       ),
       child: Row(
         children: [
-          buildCell('Member', 200),
-          buildCell('Agency', 150),
-          buildCell('Coach', 150),
-          buildCell('Progress', 120),
-          buildCell('Actions', 280, alignment: Alignment.centerRight),
+          buildCell('Member', flex: 3),
+          buildCell('Agency', flex: 2),
+          buildCell('Coach', flex: 2),
+          buildCell('Progress', flex: 2),
+          buildCell('Actions', flex: 2, alignment: Alignment.centerRight),
         ],
       ),
     );
@@ -11464,10 +11571,10 @@ class _AdminMemberManagementViewState
       ),
       child: Row(
         children: [
-          SizedBox(width: 200, child: _buildMemberCell(data)),
-          SizedBox(width: 150, child: _buildAgencyDropdownCell(data)),
-          SizedBox(
-            width: 150,
+          Expanded(flex: 3, child: _buildMemberCell(data)),
+          Expanded(flex: 2, child: _buildAgencyDropdownCell(data)),
+          Expanded(
+            flex: 2,
             child: Text(
               data.coach.isEmpty ? '—' : data.coach,
               style: const TextStyle(
@@ -11477,8 +11584,8 @@ class _AdminMemberManagementViewState
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          SizedBox(width: 120, child: _buildProgressBar(data.progress, data)),
-          SizedBox(width: 280, child: _buildActionCell(data)),
+          Expanded(flex: 2, child: _buildProgressBar(data.progress, data)),
+          Expanded(flex: 2, child: _buildActionCell(data)),
         ],
       ),
     );
