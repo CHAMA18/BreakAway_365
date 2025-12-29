@@ -6684,51 +6684,70 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   Widget _buildAgenciesView(ThemeData theme) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('agencies').snapshots(),
-      builder: (context, snapshot) {
-        debugPrint(
-            '🔍 Agencies StreamBuilder - connectionState: ${snapshot.connectionState}');
-        debugPrint(
-            '🔍 Agencies StreamBuilder - hasError: ${snapshot.hasError}');
-        debugPrint('🔍 Agencies StreamBuilder - error: ${snapshot.error}');
-        debugPrint('🔍 Agencies StreamBuilder - hasData: ${snapshot.hasData}');
-        debugPrint(
-            '🔍 Agencies StreamBuilder - docs count: ${snapshot.data?.docs.length ?? 0}');
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+      builder: (userContext, userSnapshot) {
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance.collection('agencies').snapshots(),
+          builder: (context, snapshot) {
+            debugPrint(
+                '🔍 Agencies StreamBuilder - connectionState: ${snapshot.connectionState}');
+            debugPrint(
+                '🔍 Agencies StreamBuilder - hasError: ${snapshot.hasError}');
+            debugPrint('🔍 Agencies StreamBuilder - error: ${snapshot.error}');
+            debugPrint('🔍 Agencies StreamBuilder - hasData: ${snapshot.hasData}');
+            debugPrint(
+                '🔍 Agencies StreamBuilder - docs count: ${snapshot.data?.docs.length ?? 0}');
 
-        if (snapshot.hasError) {
-          debugPrint('❌ Error loading agencies: ${snapshot.error}');
-          return Center(
-              child: Text('Error loading agencies: ${snapshot.error}'));
-        }
+            if (snapshot.hasError) {
+              debugPrint('❌ Error loading agencies: ${snapshot.error}');
+              return Center(
+                  child: Text('Error loading agencies: ${snapshot.error}'));
+            }
 
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          debugPrint('⏳ Waiting for agencies data...');
-          return const Center(child: CircularProgressIndicator());
-        }
+            if (snapshot.connectionState == ConnectionState.waiting ||
+                userSnapshot.connectionState == ConnectionState.waiting) {
+              debugPrint('⏳ Waiting for data...');
+              return const Center(child: CircularProgressIndicator());
+            }
 
-        final allAgencies = snapshot.data?.docs.map((doc) {
-              debugPrint(
-                  '📄 Processing agency doc: ${doc.id}, data: ${doc.data()}');
-              return _AdminAgencyCardData.fromFirestore(doc);
-            }).toList() ??
-            [];
-        debugPrint('✅ Total agencies loaded: ${allAgencies.length}');
+            // Get all user docs to count them per agency
+            final userDocs = userSnapshot.data?.docs ?? [];
 
-        final agencies = _filterAgencies(allAgencies);
-        debugPrint('✅ Filtered agencies: ${agencies.length}');
+            final allAgencies = snapshot.data?.docs.map((doc) {
+                  debugPrint(
+                      '📄 Processing agency doc: ${doc.id}, data: ${doc.data()}');
+                  final baseData = _AdminAgencyCardData.fromFirestore(doc);
 
-        final int totalAgencies = allAgencies.length;
-        final int totalMembers =
-            allAgencies.fold<int>(0, (sum, agency) => sum + agency.members);
-        final String averageMembers = totalAgencies == 0
-            ? '--'
-            : (totalMembers / totalAgencies).toStringAsFixed(1);
-        final int highEngagementCount =
-            allAgencies.where((agency) => agency.members >= 2).length;
+                  // Count users where the 'agency' field matches this agency name
+                  final actualMemberCount = userDocs.where((u) {
+                    final userData = u.data() as Map<String, dynamic>?;
+                    final userAgency = userData?['agency'];
+                    // We check if the user's agency matches the card's agency name
+                    return userAgency == baseData.name;
+                  }).length;
 
-        return _buildAgenciesContent(theme, agencies, totalAgencies,
-            totalMembers, averageMembers, highEngagementCount);
+                  return baseData.copyWith(members: actualMemberCount);
+                }).toList() ??
+                [];
+            debugPrint('✅ Total agencies loaded: ${allAgencies.length}');
+
+            final agencies = _filterAgencies(allAgencies);
+            debugPrint('✅ Filtered agencies: ${agencies.length}');
+
+            final int totalAgencies = allAgencies.length;
+            final int totalMembers =
+                allAgencies.fold<int>(0, (sum, agency) => sum + agency.members);
+            final String averageMembers = totalAgencies == 0
+                ? '--'
+                : (totalMembers / totalAgencies).toStringAsFixed(1);
+            final int highEngagementCount =
+                allAgencies.where((agency) => agency.members >= 2).length;
+
+            return _buildAgenciesContent(theme, agencies, totalAgencies,
+                totalMembers, averageMembers, highEngagementCount);
+          },
+        );
       },
     );
   }
@@ -7100,17 +7119,82 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                               onManageMembers: () =>
                                   _navigateToMemberManagementWithFilter(
                                       agency.name),
-                              onDelete: () {
-                                ScaffoldMessenger.of(context)
-                                  ..hideCurrentSnackBar()
-                                  ..showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'Delete request for ${agency.name} captured. Review workflow coming soon.'),
-                                      duration: const Duration(seconds: 3),
+                              onDelete: () async {
+                                // Show confirmation dialog
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
                                     ),
-                                  );
-                                _closeAgencyDetails();
+                                    title: const Text('Delete Agency'),
+                                    content: Text(
+                                      'Are you sure you want to delete "${agency.name}"?\n\n'
+                                      'This will remove the agency and reset all members\' agency association.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFDC2626),
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (confirmed != true) return;
+
+                                try {
+                                  // Update all members with this agency - set their agency field to 'add to agency'
+                                  final usersWithAgency = await FirebaseFirestore.instance
+                                      .collection('users')
+                                      .where('agency', isEqualTo: agency.name)
+                                      .get();
+
+                                  final batch = FirebaseFirestore.instance.batch();
+                                  
+                                  for (final userDoc in usersWithAgency.docs) {
+                                    batch.update(userDoc.reference, {'agency': 'add to agency'});
+                                  }
+
+                                  // Delete the agency document
+                                  batch.delete(FirebaseFirestore.instance.collection('agencies').doc(agency.id));
+
+                                  await batch.commit();
+
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context)
+                                      ..hideCurrentSnackBar()
+                                      ..showSnackBar(
+                                        SnackBar(
+                                          content: Text('${agency.name} deleted successfully'),
+                                          backgroundColor: const Color(0xFF22C55E),
+                                          duration: const Duration(seconds: 3),
+                                        ),
+                                      );
+                                    _closeAgencyDetails();
+                                  }
+                                } catch (e) {
+                                  debugPrint('Error deleting agency: $e');
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context)
+                                      ..hideCurrentSnackBar()
+                                      ..showSnackBar(
+                                        SnackBar(
+                                          content: Text('Failed to delete agency: $e'),
+                                          backgroundColor: const Color(0xFFDC2626),
+                                          duration: const Duration(seconds: 4),
+                                        ),
+                                      );
+                                  }
+                                }
                               },
                             ),
                           ),
@@ -10057,12 +10141,59 @@ class _AdminMemberManagementViewState
   double _computedAverageProgress = 0.0;
   bool _isLoadingProgress = false;
   Set<String> _loadedMemberIds = {};
+  int _refreshKey = 0; // Key to force StreamBuilder rebuild
+  
+  // Optimization: Cache available agencies
+  List<Map<String, String>> _availableAgencies = [];
+  StreamSubscription<QuerySnapshot>? _agenciesSubscription;
+
+  /// Force refresh the member list by clearing cached data and triggering rebuild
+  void _forceRefresh() {
+    if (mounted) {
+      setState(() {
+        _refreshKey++;
+        _membersWithProgress.clear();
+        _loadedMemberIds.clear();
+        _members.clear();
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _appliedAgencyFilter = widget.initialAgencyFilter;
     _loadAverageProgress();
+    
+    // Subscribe to agencies for caching
+    _agenciesSubscription = FirebaseFirestore.instance
+        .collection('agencies')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        final loaded = snapshot.docs.map((doc) {
+          final data = doc.data();
+          return {
+            'id': doc.id,
+            'name': (data['agency_name'] ?? data['name'] ?? 'Unknown Agency')
+                as String,
+          };
+        }).toList();
+        // Sort explicitly
+        loaded.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
+        
+        setState(() {
+          _availableAgencies = loaded;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _agenciesSubscription?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadMemberProgress(
@@ -10101,6 +10232,7 @@ class _AdminMemberManagementViewState
       for (int i = 0; i < docs.length; i += batchSize) {
         final batch = docs.skip(i).take(batchSize).toList();
 
+        final List<_AdminMemberRowData> updatedBatch = [];
         for (final doc in batch) {
           final memberData = doc.data() as Map<String, dynamic>;
           final bool hasCoachAssignment = assignedMemberIds.contains(doc.id);
@@ -10119,17 +10251,21 @@ class _AdminMemberManagementViewState
             agencyName: agencyFromMap,
             coachName: coachName,
           );
+          updatedBatch.add(memberWithProgress);
+        }
 
-          if (mounted) {
-            setState(() {
-              _membersWithProgress[doc.id] = memberWithProgress;
+        if (mounted) {
+          setState(() {
+            for (final member in updatedBatch) {
+              _membersWithProgress[member.userId] = member;
               // Update the member in the main list
-              final index = _members.indexWhere((m) => m.userId == doc.id);
+              final index =
+                  _members.indexWhere((m) => m.userId == member.userId);
               if (index != -1) {
-                _members[index] = memberWithProgress;
+                _members[index] = member;
               }
-            });
-          }
+            }
+          });
         }
 
         // Small delay to allow UI updates
@@ -10282,11 +10418,7 @@ class _AdminMemberManagementViewState
       .length;
   double get _averageProgress => _computedAverageProgress;
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
+
 
   List<_AdminMemberRowData> _getFilteredMembers(
       List<_AdminMemberRowData> allMembers) {
@@ -11097,6 +11229,7 @@ class _AdminMemberManagementViewState
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
+      key: ValueKey('member_mgmt_$_refreshKey'),
       stream: FirebaseFirestore.instance.collection('users').snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -11230,8 +11363,15 @@ class _AdminMemberManagementViewState
                   }).toList();
 
                   // Asynchronously load progress data for each member
-                  _loadMemberProgress(snapshot.data!.docs, assignedMemberIds,
-                      userAgencyMap, memberToCoachMap, coachIdToNameMap);
+                  // We use microtask to avoid calling setState during build
+                  if (!_isLoadingProgress) {
+                    Future.microtask(() => _loadMemberProgress(
+                        snapshot.data!.docs,
+                        assignedMemberIds,
+                        userAgencyMap,
+                        memberToCoachMap,
+                        coachIdToNameMap));
+                  }
                 }
 
                 final visibleMembers = _getFilteredMembers(allMembers);
@@ -11578,6 +11718,7 @@ class _AdminMemberManagementViewState
 
   Widget _buildMemberRow(_AdminMemberRowData data) {
     return Container(
+      key: ValueKey('member_row_${data.userId}'),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: const BoxDecoration(
         border: Border(
@@ -11709,7 +11850,10 @@ class _AdminMemberManagementViewState
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          onPressed: () => _showEditMemberDialog(data),
+          onPressed: () {
+            debugPrint('🔘 Edit button PRESSED for ${data.name} (ID: ${data.userId})');
+            _showEditMemberDialog(data);
+          },
           icon: const Icon(Icons.edit_outlined,
               size: 18, color: Color(0xFF4B5563)),
           tooltip: 'Edit Member',
@@ -11844,7 +11988,9 @@ class _AdminMemberManagementViewState
     );
   }
 
-  Future<void> _showEditMemberDialog(_AdminMemberRowData data) async {
+  void _showEditMemberDialog(_AdminMemberRowData data) {
+    debugPrint('🔘 Edit button clicked for ${data.name}');
+    
     // PRE-FILL LOGIC: Attempt to split the full name from the row data
     // so the user sees *something* immediately, even before the DB fetch.
     final nameParts = data.name.trim().split(' ');
@@ -11857,340 +12003,20 @@ class _AdminMemberManagementViewState
       }
     }
 
-    final firstNameController = TextEditingController(text: initialFirstName);
-    final lastNameController = TextEditingController(text: initialLastName);
-    final emailController = TextEditingController(text: data.email);
-    String? selectedRole = data.role;
-    String? selectedAgency;
-    List<Map<String, String>> agencies = [];
-    bool loadingAgencies = true;
-
-    // Load current user data to get the most up-to-date values
-    try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(data.userId)
-          .get();
-      if (userDoc.exists) {
-        final userData = userDoc.data()!;
-        // Overwrite with fresh data from DB if available
-        if (userData['firstName'] != null) {
-          firstNameController.text = userData['firstName'] as String;
-        }
-        if (userData['lastName'] != null) {
-          lastNameController.text = userData['lastName'] as String;
-        }
-
-        // Get current agency
-        final agencyField = userData['agency'];
-        if (agencyField is DocumentReference) {
-          selectedAgency = agencyField.id;
-        } else if (agencyField is String && agencyField.isNotEmpty) {
-          // If stored as a String (Name), we'll try to match it to an ID later
-          // For now, we store the name temporarily if it's not an ID,
-          // but the dropdown expects IDs. We will handle this matching
-          // after loading agencies.
-          selectedAgency = agencyField;
-        }
-      }
-    } catch (e) {
-      debugPrint('Error loading user data: $e');
-    }
-
-    // Load agencies
-    try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('agencies').get();
-      agencies = snapshot.docs.map((doc) {
-        final docData = doc.data();
-        return {
-          'id': doc.id,
-          'name': (docData['agency_name'] ??
-              docData['name'] ??
-              'Unknown Agency') as String,
-        };
-      }).toList();
-      agencies.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
-      loadingAgencies = false;
-
-      // Logic to reconcile selectedAgency if it was loaded as a Name string
-      if (selectedAgency != null) {
-        final matchingAgency = agencies.firstWhere(
-            (a) => a['id'] == selectedAgency || a['name'] == selectedAgency,
-            orElse: () => {});
-        if (matchingAgency.isNotEmpty) {
-          selectedAgency = matchingAgency['id'];
-        } else {
-          // If no match found (orphaned name or invalid ID), reset or keep as is
-          // If it's a valid ID it will persist, if it was a name that doesn't exist,
-          // it effectively becomes null for the dropdown.
-          // We check valid IDs in the dropdown value logic.
-        }
-      }
-    } catch (e) {
-      debugPrint('Error loading agencies: $e');
-      loadingAgencies = false;
-    }
-
-    if (!mounted) return;
-
-    await showDialog(
+    // Show dialog IMMEDIATELY
+    showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Container(
-            width: 480,
-            padding: const EdgeInsets.all(24),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Edit Member',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1F2937),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Update information for ${data.name}',
-                    style:
-                        const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('First Name',
-                                style: TextStyle(
-                                    fontSize: 13, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: firstNameController,
-                              decoration: InputDecoration(
-                                hintText: 'First name',
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 12),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Last Name',
-                                style: TextStyle(
-                                    fontSize: 13, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: lastNameController,
-                              decoration: InputDecoration(
-                                hintText: 'Last name',
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 12),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Email',
-                      style:
-                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      hintText: 'Email address',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Role',
-                      style:
-                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    value: selectedRole,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'Admin', child: Text('Admin')),
-                      DropdownMenuItem(value: 'Coach', child: Text('Coach')),
-                      DropdownMenuItem(value: 'Member', child: Text('Member')),
-                    ],
-                    onChanged: (value) => setState(() => selectedRole = value),
-                  ),
-                  const SizedBox(height: 16),
-                  // Only show Agency dropdown if role is NOT Admin
-                  // Assuming Admins don't belong to a specific agency or can see all
-                  if (selectedRole != 'Admin') ...[
-                    const Text('Agency',
-                        style: TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-                    loadingAgencies
-                        ? Container(
-                            height: 48,
-                            alignment: Alignment.centerLeft,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              border:
-                                  Border.all(color: const Color(0xFFE5E7EB)),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text('Loading agencies...',
-                                style: TextStyle(color: Color(0xFF9CA3AF))),
-                          )
-                        : DropdownButtonFormField<String>(
-                            value: agencies
-                                    .any((a) => a['id'] == selectedAgency)
-                                ? selectedAgency
-                                : null,
-                            decoration: InputDecoration(
-                              hintText: 'Select agency',
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 12),
-                            ),
-                            items: agencies.map((agency) {
-                              return DropdownMenuItem(
-                                value: agency['id'],
-                                child: Text(agency['name']!),
-                              );
-                            }).toList(),
-                            onChanged: (value) =>
-                                setState(() => selectedAgency = value),
-                          ),
-                  ],
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Cancel'),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () async {
-                          try {
-                            // Construct updated data map
-                            final fName = firstNameController.text.trim();
-                            final lName = lastNameController.text.trim();
-                            // Update display name dynamically based on new names
-                            final newDisplayName = '$fName $lName'.trim();
-
-                            final updateData = <String, dynamic>{
-                              'firstName': fName,
-                              'lastName': lName,
-                              'display_name': newDisplayName, // Update display name
-                              'displayName': newDisplayName, // Redundant fallback
-                              'email': emailController.text.trim(),
-                              'role': selectedRole,
-                              'updatedAt': FieldValue.serverTimestamp(),
-                            };
-
-                            // AGENCY HANDLING: Store the Agency NAME as a string
-                            if (selectedRole != 'Admin') {
-                              if (selectedAgency != null &&
-                                  selectedAgency!.isNotEmpty) {
-                                // Find the name from the ID
-                                final agencyObj = agencies.firstWhere(
-                                    (element) =>
-                                        element['id'] == selectedAgency,
-                                    orElse: () =>
-                                        {'name': 'Unknown Agency'});
-                                updateData['agency'] = agencyObj['name'];
-                              } else {
-                                updateData['agency'] = null;
-                              }
-                            } else {
-                              // If admin, clear agency
-                              updateData['agency'] = null;
-                            }
-
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(data.userId)
-                                .update(updateData);
-
-                            if (context.mounted) {
-                              Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Member updated successfully!'),
-                                  backgroundColor: Color(0xFF22C55E),
-                                ),
-                              );
-                              // Ideally trigger a refresh of the parent table here if needed
-                            }
-                          } catch (e) {
-                            debugPrint('Error updating member: $e');
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Failed to update member: $e'),
-                                  backgroundColor: const Color(0xFFEF4444),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        child: const Text('Save Changes'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+      builder: (context) => _EditMemberDialog(
+        data: data,
+        initialFirstName: initialFirstName,
+        initialLastName: initialLastName,
+        availableAgencies: _availableAgencies, // Pass cached agencies
+        onMemberUpdated: () => _forceRefresh(),
       ),
     );
   }
+
+
 
   Future<void> _showDeleteMemberDialog(_AdminMemberRowData data) async {
     final confirmed = await showDialog<bool>(
@@ -12277,6 +12103,7 @@ class _AdminMemberManagementViewState
               backgroundColor: const Color(0xFF22C55E),
             ),
           );
+          _forceRefresh(); // Refresh the list after deletion
         }
       } catch (e) {
         debugPrint('Error deleting member: $e');
@@ -12306,6 +12133,7 @@ class _AdminMemberManagementViewState
             backgroundColor: const Color(0xFF22C55E),
           ),
         );
+        _forceRefresh(); // Refresh the list to show updated status
       }
     } catch (e) {
       if (mounted) {
@@ -12524,6 +12352,7 @@ class _AdminMemberManagementViewState
             backgroundColor: const Color(0xFF22C55E),
           ),
         );
+        _forceRefresh(); // Refresh the list to show assigned coach
       }
     } catch (e) {
       if (mounted) {
@@ -12777,6 +12606,7 @@ class _AdminMemberManagementViewState
             backgroundColor: const Color(0xFF22C55E),
           ),
         );
+        _forceRefresh(); // Refresh the list to show updated coach
       }
     } catch (e) {
       if (mounted) {
@@ -16832,6 +16662,24 @@ class _AdminAgencyCardData {
   final int members;
   final String? logoAsset;
   final String? logoUrl;
+
+  _AdminAgencyCardData copyWith({
+    String? id,
+    String? name,
+    String? location,
+    int? members,
+    String? logoAsset,
+    String? logoUrl,
+  }) {
+    return _AdminAgencyCardData(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      location: location ?? this.location,
+      members: members ?? this.members,
+      logoAsset: logoAsset ?? this.logoAsset,
+      logoUrl: logoUrl ?? this.logoUrl,
+    );
+  }
 
   factory _AdminAgencyCardData.fromFirestore(
       DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -54260,5 +54108,502 @@ class _ColorChip extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _EditMemberDialog extends StatefulWidget {
+  final _AdminMemberRowData data;
+  final String initialFirstName;
+  final String initialLastName;
+  final VoidCallback onMemberUpdated;
+  final List<Map<String, String>> availableAgencies;
+
+  const _EditMemberDialog({
+    required this.data,
+    required this.initialFirstName,
+    required this.initialLastName,
+    required this.onMemberUpdated,
+    this.availableAgencies = const [],
+  });
+
+  @override
+  State<_EditMemberDialog> createState() => _EditMemberDialogState();
+}
+
+class _EditMemberDialogState extends State<_EditMemberDialog> {
+  late TextEditingController firstNameController;
+  late TextEditingController lastNameController;
+  late TextEditingController emailController;
+  String? selectedRole;
+  String? selectedAgency;
+  String? previousAgencyId;
+  List<Map<String, String>> agencies = [];
+  bool loadingAgencies = true;
+  bool isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    firstNameController = TextEditingController(text: widget.initialFirstName);
+    lastNameController = TextEditingController(text: widget.initialLastName);
+    emailController = TextEditingController(text: widget.data.email);
+    selectedRole = widget.data.role;
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    firstNameController.dispose();
+    lastNameController.dispose();
+    emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    debugPrint('🏁 _EditMemberDialogState: _loadData STARTED for ${widget.data.name}');
+    
+    // Load current user data to get the most up-to-date values
+    try {
+      debugPrint('⏳ Fetching user doc for ${widget.data.userId}...');
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.data.userId)
+          .get();
+      debugPrint('✅ User doc fetched. Exists: ${userDoc.exists}');
+      
+      if (userDoc.exists && mounted) {
+        final userData = userDoc.data()!;
+        debugPrint('📄 User Data: $userData');
+        
+        // Overwrite with fresh data from DB if available
+        if (userData['firstName'] != null) {
+          firstNameController.text = userData['firstName'] as String;
+        }
+        if (userData['lastName'] != null) {
+          lastNameController.text = userData['lastName'] as String;
+        }
+
+        // Get current agency
+        final agencyField = userData['agency'];
+        debugPrint('🏢 Raw Agency Field: $agencyField');
+        
+        if (agencyField is DocumentReference) {
+          selectedAgency = agencyField.id;
+          debugPrint('🏢 Resolved Agency via Ref: $selectedAgency');
+        } else if (agencyField is String && agencyField.isNotEmpty) {
+          selectedAgency = agencyField;
+           debugPrint('🏢 Resolved Agency via String: $selectedAgency');
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error loading user data: $e');
+    }
+
+    // Load agencies
+    try {
+      // Optimization: Use cached agencies if available
+      if (widget.availableAgencies.isNotEmpty) {
+        debugPrint('🚀 Using cached agencies (${widget.availableAgencies.length})');
+        setState(() {
+          agencies = List.from(widget.availableAgencies); 
+          // Logic to reconcile selectedAgency if it was loaded as a Name string
+          if (selectedAgency != null) {
+            final matchingAgency = agencies.firstWhere(
+                (a) => a['id'] == selectedAgency || a['name'] == selectedAgency,
+                orElse: () => <String, String>{});
+            if (matchingAgency.isNotEmpty) {
+              selectedAgency = matchingAgency['id'];
+              debugPrint('✅ Reconciled to ID (Cache): $selectedAgency');
+            }
+          }
+           previousAgencyId = selectedAgency;
+        });
+        // We can safely finish here for agencies part
+        return; 
+      }
+
+      debugPrint('⏳ Fetching agencies collection (Cache missed)...');
+      // Optimization: Limit fields or cache if needed, but for now just log it
+      final snapshot =
+          await FirebaseFirestore.instance.collection('agencies').get();
+      debugPrint('✅ Agencies fetched. Count: ${snapshot.docs.length}');
+      
+      if (!mounted) {
+         debugPrint('⚠️ Widget unmounted after fetching agencies. Aborting.');
+         return;
+      }
+      
+      final loadedAgencies = snapshot.docs.map((doc) {
+        final docData = doc.data();
+        return {
+          'id': doc.id,
+          'name': (docData['agency_name'] ??
+              docData['name'] ??
+              'Unknown Agency') as String,
+        };
+      }).toList();
+      loadedAgencies.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
+      
+      setState(() {
+        agencies = loadedAgencies;
+        // Don't set loadingAgencies = false here, do it in finally block
+        
+        // Logic to reconcile selectedAgency if it was loaded as a Name string
+        if (selectedAgency != null) {
+          debugPrint('🔍 Reconciling selectedAgency: "$selectedAgency"');
+          final matchingAgency = agencies.firstWhere(
+              (a) => a['id'] == selectedAgency || a['name'] == selectedAgency,
+              orElse: () => <String, String>{});
+          if (matchingAgency.isNotEmpty) {
+            selectedAgency = matchingAgency['id'];
+             debugPrint('✅ Reconciled to ID: $selectedAgency');
+          } else {
+             debugPrint('⚠️ Could not match "$selectedAgency" to any known agency.');
+          }
+        }
+        // Store the resolved agency ID as the previous agency for later comparison
+        previousAgencyId = selectedAgency;
+      });
+    } catch (e) {
+      debugPrint('❌ Error loading agencies: $e');
+    } finally {
+      if (mounted) {
+         debugPrint('🏁 _loadData FINISHED. Setting loadingAgencies = false.');
+        setState(() {
+          loadingAgencies = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveMember() async {
+      if (isSaving) return;
+      setState(() => isSaving = true);
+      
+      try {
+        final updateData = {
+          'firstName': firstNameController.text.trim(),
+          'lastName': lastNameController.text.trim(),
+          'email': emailController.text.trim(),
+          'role': selectedRole,
+          'agency': selectedAgency != null && selectedAgency!.isNotEmpty
+              ? FirebaseFirestore.instance.collection('agencies').doc(selectedAgency)
+              : null,
+          if (selectedAgency == null || selectedAgency!.isEmpty) 
+             'agency': FieldValue.delete(),
+        };
+
+        final fName = firstNameController.text.trim();
+        final lName = lastNameController.text.trim();
+        final newDisplayName = '$fName $lName'.trim();
+        updateData['firstName'] = fName;
+        updateData['lastName'] = lName;
+        updateData['display_name'] = newDisplayName;
+        updateData['displayName'] = newDisplayName;
+        updateData['updatedAt'] = FieldValue.serverTimestamp();
+
+        // Handle Agency Name String storage for legacy support
+         if (selectedRole != 'Admin' && selectedAgency != null && selectedAgency!.isNotEmpty) {
+             final agencyObj = agencies.firstWhere(
+                 (element) => element['id'] == selectedAgency,
+                 orElse: () => {'name': 'Unknown Agency'});
+             updateData['agency'] = agencyObj['name']; // Store name as string too if needed or standard
+             // Actually, the new standard seems to likely be string name or doc ref.
+             // Based on previous code, we were storing name string in 'agency' field sometimes?
+             // Let's stick to the previous code's logic:
+             // "updateData['agency'] = agencyObj['name'];" was in the loop.
+             // But wait, the previous code also had:
+             // "'agency': selectedAgency != null ... ? Reference : null"
+             // Let's ensure we are consistent.
+             // Re-reading Step 1850 logic:
+             // It set updateData['agency'] = agencyObj['name']; IF not admin.
+             // Just to be safe and consistent with the deleted code, I will use the NAME string if that's what the app expects, 
+             // OR simpler: The app seems to use `agency` field as string name in some places and ref in others.
+             // The deleted code at 12666 explicitly set it to NAME string.
+             updateData['agency'] = agencyObj['name'];
+        } else {
+             updateData['agency'] = null;
+        }
+
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.data.userId)
+            .update(updateData);
+
+        // Update agency members arrays if agency assignment changed
+        if (mounted) {
+           final memberRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.data.userId);
+          
+          String? newAgencyId;
+          if (selectedRole != 'Admin' && selectedAgency != null && selectedAgency!.isNotEmpty) {
+            newAgencyId = selectedAgency;
+          }
+
+          if (newAgencyId != previousAgencyId) {
+             // 1. Remove from old agency's array
+             if (previousAgencyId != null) {
+               try {
+                 await FirebaseFirestore.instance
+                     .collection('agencies')
+                     .doc(previousAgencyId)
+                     .update({
+                   'members': FieldValue.arrayRemove([memberRef]),
+                 });
+               } catch (e) {
+                 debugPrint('Error removing member from old agency: $e');
+               }
+             }
+
+             // 2. Add to new agency's array
+             if (newAgencyId != null) {
+               try {
+                 await FirebaseFirestore.instance
+                     .collection('agencies')
+                     .doc(newAgencyId)
+                     .update({
+                   'members': FieldValue.arrayUnion([memberRef]),
+                 });
+               } catch (e) {
+                 debugPrint('Error adding member to new agency: $e');
+               }
+             }
+          }
+         
+          if (mounted) {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Member updated successfully!'),
+                backgroundColor: Color(0xFF22C55E),
+              ),
+            );
+            widget.onMemberUpdated();
+          }
+        }
+      } catch (e) {
+        debugPrint('Error updating member: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text('Error updating member: $e')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => isSaving = false);
+      }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            width: 480,
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   Row(
+                    children: [
+                       const Expanded(
+                        child: Text(
+                          'Edit Member',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Update information for ${widget.data.name}',
+                    style:
+                        const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+                  ),
+                  if (loadingAgencies && (agencies.isEmpty && previousAgencyId == null))
+                     const Padding(
+                       padding: EdgeInsets.symmetric(vertical: 20),
+                       child: Center(child: CircularProgressIndicator()),
+                     )
+                  else ...[
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('First Name',
+                                style: TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: firstNameController,
+                              decoration: InputDecoration(
+                                hintText: 'First name',
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Last Name',
+                                style: TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: lastNameController,
+                              decoration: InputDecoration(
+                                hintText: 'Last name',
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Email',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      hintText: 'Email address',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Role',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Admin', child: Text('Admin')),
+                      DropdownMenuItem(value: 'Coach', child: Text('Coach')),
+                      DropdownMenuItem(value: 'Member', child: Text('Member')),
+                    ],
+                    onChanged: (value) => setState(() => selectedRole = value),
+                  ),
+                  const SizedBox(height: 16),
+                  // Only show Agency dropdown if role is NOT Admin
+                  // Assuming Admins don't belong to a specific agency or can see all
+                  if (selectedRole != 'Admin') ...[
+                    const Text('Agency',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    loadingAgencies
+                        ? Container(
+                            height: 48,
+                            alignment: Alignment.centerLeft,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              border:
+                                  Border.all(color: const Color(0xFFE5E7EB)),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text('Loading agencies...',
+                                style: TextStyle(color: Color(0xFF9CA3AF))),
+                          )
+                        : DropdownButtonFormField<String>(
+                            value: agencies
+                                    .any((a) => a['id'] == selectedAgency)
+                                ? selectedAgency
+                                : null,
+                            decoration: InputDecoration(
+                              hintText: 'Select agency',
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                            ),
+                            items: agencies.map((agency) {
+                              return DropdownMenuItem(
+                                value: agency['id'],
+                                child: Text(agency['name']!),
+                              );
+                            }).toList(),
+                            onChanged: (value) =>
+                                setState(() => selectedAgency = value),
+                          ),
+                  ],
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel',
+                            style: TextStyle(color: Color(0xFF6B7280))),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 40,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                          ),
+                          onPressed: isSaving ? null : _saveMember,
+                          child: isSaving
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Text('Save Changes',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+            ),
+          ),
+        );
   }
 }
