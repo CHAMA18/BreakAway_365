@@ -6398,6 +6398,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       return;
     }
 
+    debugPrint('🚀 Starting user creation process for ${data.email}...');
     FirebaseApp? secondaryApp;
     try {
       // Use a secondary Firebase app to create the user without signing out the current admin
@@ -6438,7 +6439,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         'lastName': data.lastName,
         'displayName': '${data.firstName} ${data.lastName}'.trim(),
         'role': data.role,
-        'agency': data.role == 'Admin' ? null : data.agency,
+        'agency': data.role == 'Admin'
+            ? null
+            : (data.agencyName.isNotEmpty ? data.agencyName : 'Unknown Agency'),
         'status': 'approved', // Auto-approve since admin created the account
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -6446,6 +6449,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
       // If agency is selected, add user reference to agency's members field
       if (data.role != 'Admin' && data.agency.isNotEmpty) {
+        debugPrint('🏢 Adding user $userId to agency ${data.agency} members list...');
         await FirebaseFirestore.instance
             .collection('agencies')
             .doc(data.agency)
@@ -9589,6 +9593,7 @@ class _AdminMemberRowData {
     this.hasCoachAssignment = false,
     this.profileImageUrl,
     this.completedModules = const [],
+    this.coachId,
   });
 
   final String userId;
@@ -9604,6 +9609,7 @@ class _AdminMemberRowData {
   final bool hasCoachAssignment;
   final String? profileImageUrl;
   final List<Map<String, String>> completedModules;
+  final String? coachId;
 
   static Future<_AdminMemberRowData> fromFirestoreAsync(
     String userId,
@@ -9611,6 +9617,7 @@ class _AdminMemberRowData {
     bool hasCoachAssignment = false,
     String? agencyName,
     String? coachName,
+    String? coachId,
   }) async {
     // --- ROBUST NAME RESOLUTION START ---
     final candidates = [
@@ -9766,6 +9773,7 @@ class _AdminMemberRowData {
       completedModules: completedModules,
       hasCoachAssignment: hasCoachAssignment,
       profileImageUrl: profileImageUrl,
+      coachId: coachId,
     );
   }
 
@@ -9778,6 +9786,7 @@ class _AdminMemberRowData {
     bool hasCoachAssignment = false,
     String? agencyName,
     String? coachName,
+    String? coachId,
   }) {
     // --- ROBUST NAME RESOLUTION START ---
     final candidates = [
@@ -9881,6 +9890,7 @@ class _AdminMemberRowData {
       completedModules: completedModules,
       hasCoachAssignment: hasCoachAssignment,
       profileImageUrl: profileImageUrl,
+      coachId: coachId,
     );
   }
 
@@ -9890,6 +9900,7 @@ class _AdminMemberRowData {
     bool hasCoachAssignment = false,
     String? agencyName,
     String? coachName,
+    String? coachId,
   }) {
     // --- ROBUST NAME RESOLUTION START ---
     final candidates = [
@@ -9993,6 +10004,7 @@ class _AdminMemberRowData {
       profileImageUrl: profileImageUrl,
       completedModules: const [],
       email: email,
+      coachId: coachId,
     );
   }
 }
@@ -11114,7 +11126,8 @@ class _AdminMemberManagementViewState
                       final data = coachDoc.data() as Map<String, dynamic>;
 
                       // Get coach reference from 'coachref' field
-                      final coachRef = data['coachref'] as DocumentReference?;
+                      final coachRef = data['coachref'] as DocumentReference? ??
+                          data['coach'] as DocumentReference?;
                       String coachId = '';
 
                       if (coachRef != null) {
@@ -11123,7 +11136,8 @@ class _AdminMemberManagementViewState
                       }
 
                       // Get member reference - could be memberref or membersAssigned
-                      final memberRef = data['memberref'] as DocumentReference?;
+                      final memberRef = data['memberref'] as DocumentReference? ??
+                          data['member'] as DocumentReference?;
                       final membersAssigned =
                           data['membersAssigned'] as List<dynamic>?;
 
@@ -11211,6 +11225,7 @@ class _AdminMemberManagementViewState
                       hasCoachAssignment: hasCoachAssignment,
                       agencyName: agencyFromMap,
                       coachName: coachName,
+                      coachId: coachId,
                     );
                   }).toList();
 
@@ -11830,15 +11845,27 @@ class _AdminMemberManagementViewState
   }
 
   Future<void> _showEditMemberDialog(_AdminMemberRowData data) async {
-    final firstNameController = TextEditingController();
-    final lastNameController = TextEditingController();
+    // PRE-FILL LOGIC: Attempt to split the full name from the row data
+    // so the user sees *something* immediately, even before the DB fetch.
+    final nameParts = data.name.trim().split(' ');
+    String initialFirstName = '';
+    String initialLastName = '';
+    if (nameParts.isNotEmpty) {
+      initialFirstName = nameParts.first;
+      if (nameParts.length > 1) {
+        initialLastName = nameParts.sublist(1).join(' ');
+      }
+    }
+
+    final firstNameController = TextEditingController(text: initialFirstName);
+    final lastNameController = TextEditingController(text: initialLastName);
     final emailController = TextEditingController(text: data.email);
     String? selectedRole = data.role;
     String? selectedAgency;
     List<Map<String, String>> agencies = [];
     bool loadingAgencies = true;
 
-    // Load current user data
+    // Load current user data to get the most up-to-date values
     try {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -11846,14 +11873,23 @@ class _AdminMemberManagementViewState
           .get();
       if (userDoc.exists) {
         final userData = userDoc.data()!;
-        firstNameController.text = userData['firstName'] as String? ?? '';
-        lastNameController.text = userData['lastName'] as String? ?? '';
+        // Overwrite with fresh data from DB if available
+        if (userData['firstName'] != null) {
+          firstNameController.text = userData['firstName'] as String;
+        }
+        if (userData['lastName'] != null) {
+          lastNameController.text = userData['lastName'] as String;
+        }
 
         // Get current agency
         final agencyField = userData['agency'];
         if (agencyField is DocumentReference) {
           selectedAgency = agencyField.id;
         } else if (agencyField is String && agencyField.isNotEmpty) {
+          // If stored as a String (Name), we'll try to match it to an ID later
+          // For now, we store the name temporarily if it's not an ID,
+          // but the dropdown expects IDs. We will handle this matching
+          // after loading agencies.
           selectedAgency = agencyField;
         }
       }
@@ -11876,6 +11912,21 @@ class _AdminMemberManagementViewState
       }).toList();
       agencies.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
       loadingAgencies = false;
+
+      // Logic to reconcile selectedAgency if it was loaded as a Name string
+      if (selectedAgency != null) {
+        final matchingAgency = agencies.firstWhere(
+            (a) => a['id'] == selectedAgency || a['name'] == selectedAgency,
+            orElse: () => {});
+        if (matchingAgency.isNotEmpty) {
+          selectedAgency = matchingAgency['id'];
+        } else {
+          // If no match found (orphaned name or invalid ID), reset or keep as is
+          // If it's a valid ID it will persist, if it was a name that doesn't exist,
+          // it effectively becomes null for the dropdown.
+          // We check valid IDs in the dropdown value logic.
+        }
+      }
     } catch (e) {
       debugPrint('Error loading agencies: $e');
       loadingAgencies = false;
@@ -12006,42 +12057,48 @@ class _AdminMemberManagementViewState
                     onChanged: (value) => setState(() => selectedRole = value),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Agency',
-                      style:
-                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  loadingAgencies
-                      ? Container(
-                          height: 48,
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
-                            borderRadius: BorderRadius.circular(8),
+                  // Only show Agency dropdown if role is NOT Admin
+                  // Assuming Admins don't belong to a specific agency or can see all
+                  if (selectedRole != 'Admin') ...[
+                    const Text('Agency',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    loadingAgencies
+                        ? Container(
+                            height: 48,
+                            alignment: Alignment.centerLeft,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              border:
+                                  Border.all(color: const Color(0xFFE5E7EB)),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text('Loading agencies...',
+                                style: TextStyle(color: Color(0xFF9CA3AF))),
+                          )
+                        : DropdownButtonFormField<String>(
+                            value: agencies
+                                    .any((a) => a['id'] == selectedAgency)
+                                ? selectedAgency
+                                : null,
+                            decoration: InputDecoration(
+                              hintText: 'Select agency',
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                            ),
+                            items: agencies.map((agency) {
+                              return DropdownMenuItem(
+                                value: agency['id'],
+                                child: Text(agency['name']!),
+                              );
+                            }).toList(),
+                            onChanged: (value) =>
+                                setState(() => selectedAgency = value),
                           ),
-                          child: const Text('Loading agencies...',
-                              style: TextStyle(color: Color(0xFF9CA3AF))),
-                        )
-                      : DropdownButtonFormField<String>(
-                          value: agencies.any((a) => a['id'] == selectedAgency)
-                              ? selectedAgency
-                              : null,
-                          decoration: InputDecoration(
-                            hintText: 'Select agency',
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 12),
-                          ),
-                          items: agencies.map((agency) {
-                            return DropdownMenuItem(
-                              value: agency['id'],
-                              child: Text(agency['name']!),
-                            );
-                          }).toList(),
-                          onChanged: (value) =>
-                              setState(() => selectedAgency = value),
-                        ),
+                  ],
                   const SizedBox(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -12060,18 +12117,39 @@ class _AdminMemberManagementViewState
                         ),
                         onPressed: () async {
                           try {
+                            // Construct updated data map
+                            final fName = firstNameController.text.trim();
+                            final lName = lastNameController.text.trim();
+                            // Update display name dynamically based on new names
+                            final newDisplayName = '$fName $lName'.trim();
+
                             final updateData = <String, dynamic>{
-                              'firstName': firstNameController.text.trim(),
-                              'lastName': lastNameController.text.trim(),
+                              'firstName': fName,
+                              'lastName': lName,
+                              'display_name': newDisplayName, // Update display name
+                              'displayName': newDisplayName, // Redundant fallback
                               'email': emailController.text.trim(),
                               'role': selectedRole,
+                              'updatedAt': FieldValue.serverTimestamp(),
                             };
 
-                            if (selectedAgency != null &&
-                                selectedAgency!.isNotEmpty) {
-                              updateData['agency'] = FirebaseFirestore.instance
-                                  .collection('agencies')
-                                  .doc(selectedAgency);
+                            // AGENCY HANDLING: Store the Agency NAME as a string
+                            if (selectedRole != 'Admin') {
+                              if (selectedAgency != null &&
+                                  selectedAgency!.isNotEmpty) {
+                                // Find the name from the ID
+                                final agencyObj = agencies.firstWhere(
+                                    (element) =>
+                                        element['id'] == selectedAgency,
+                                    orElse: () =>
+                                        {'name': 'Unknown Agency'});
+                                updateData['agency'] = agencyObj['name'];
+                              } else {
+                                updateData['agency'] = null;
+                              }
+                            } else {
+                              // If admin, clear agency
+                              updateData['agency'] = null;
                             }
 
                             await FirebaseFirestore.instance
@@ -12087,6 +12165,7 @@ class _AdminMemberManagementViewState
                                   backgroundColor: Color(0xFF22C55E),
                                 ),
                               );
+                              // Ideally trigger a refresh of the parent table here if needed
                             }
                           } catch (e) {
                             debugPrint('Error updating member: $e');
@@ -12253,19 +12332,53 @@ class _AdminMemberManagementViewState
       // Extract coach details from each document
       for (final coachDoc in coachesSnapshot.docs) {
         final docData = coachDoc.data();
-        final firstName = docData['firstName'] as String? ?? '';
-        final lastName = docData['lastName'] as String? ?? '';
-        final name = '$firstName $lastName'.trim();
+        
+        // ROBUST NAME RESOLUTION
+        final candidates = [
+          docData['display_name'],
+          docData['displayName'],
+          docData['fullName'],
+          docData['name'],
+          docData['firstName'] != null || docData['lastName'] != null
+              ? '${docData['firstName'] ?? ''} ${docData['lastName'] ?? ''}'.trim()
+              : null,
+          docData['first_name'] != null || docData['last_name'] != null
+              ? '${docData['first_name'] ?? ''} ${docData['last_name'] ?? ''}'.trim()
+              : null,
+          docData['username'],
+          docData['email'],
+        ];
+        
+        String name = '';
+        for (final candidate in candidates) {
+          if (candidate != null && candidate is String && candidate.trim().isNotEmpty) {
+            name = candidate.trim();
+            break;
+          }
+        }
+        
         if (name.isNotEmpty) {
           coaches.add({
             'id': coachDoc.id,
             'name': name,
+          });
+        } else {
+          // Even if no name, show the user ID so admin can see them
+          coaches.add({
+            'id': coachDoc.id,
+            'name': 'Coach (${coachDoc.id.substring(0, 8)}...)',
           });
         }
       }
 
       // Sort coaches by name
       coaches.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
+      
+      debugPrint('🔍 Found ${coachesSnapshot.docs.length} users with role=Coach');
+      debugPrint('🔍 After name resolution: ${coaches.length} coaches available');
+      if (coaches.isEmpty) {
+        debugPrint('⚠️ No coaches found in dropdown!');
+      }
     } catch (e) {
       debugPrint('Failed to load coaches: $e');
     }
@@ -12385,11 +12498,24 @@ class _AdminMemberManagementViewState
       final coachRef =
           FirebaseFirestore.instance.collection('users').doc(coachId);
 
-      await FirebaseFirestore.instance.collection('member_coach').add({
-        'member': memberRef,
-        'coach': coachRef,
-        'assigned_at': FieldValue.serverTimestamp(),
-      });
+      // Query for coach's document using either 'coachref' or 'coach' field
+      final coachDocs = await _findCoachDocument(coachRef);
+
+      if (coachDocs.isNotEmpty) {
+        // Document exists - update membersAssigned array
+        await coachDocs.first.reference.update({
+          'membersAssigned': FieldValue.arrayUnion([memberRef]),
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      } else {
+        // No document exists - create new one
+        await FirebaseFirestore.instance.collection('member_coach').add({
+          'coachref': coachRef,
+          'membersAssigned': [memberRef],
+          'assigned_at': FieldValue.serverTimestamp(),
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -12411,6 +12537,26 @@ class _AdminMemberManagementViewState
     }
   }
 
+  // Helper method to find coach document
+  Future<List<QueryDocumentSnapshot>> _findCoachDocument(
+      DocumentReference coachRef) async {
+    var docs = await FirebaseFirestore.instance
+        .collection('member_coach')
+        .where('coachref', isEqualTo: coachRef)
+        .limit(1)
+        .get();
+
+    if (docs.docs.isEmpty) {
+      docs = await FirebaseFirestore.instance
+          .collection('member_coach')
+          .where('coach', isEqualTo: coachRef)
+          .limit(1)
+          .get();
+    }
+
+    return docs.docs;
+  }
+
   Future<void> _showReassignCoachDialog(_AdminMemberRowData data) async {
     final coaches = <Map<String, String>>[];
 
@@ -12424,26 +12570,60 @@ class _AdminMemberManagementViewState
       // Extract coach details from each document
       for (final coachDoc in coachesSnapshot.docs) {
         final docData = coachDoc.data();
-        final firstName = docData['firstName'] as String? ?? '';
-        final lastName = docData['lastName'] as String? ?? '';
-        final name = '$firstName $lastName'.trim();
+        
+        // ROBUST NAME RESOLUTION
+        final candidates = [
+          docData['display_name'],
+          docData['displayName'],
+          docData['fullName'],
+          docData['name'],
+          docData['firstName'] != null || docData['lastName'] != null
+              ? '${docData['firstName'] ?? ''} ${docData['lastName'] ?? ''}'.trim()
+              : null,
+          docData['first_name'] != null || docData['last_name'] != null
+              ? '${docData['first_name'] ?? ''} ${docData['last_name'] ?? ''}'.trim()
+              : null,
+          docData['username'],
+          docData['email'],
+        ];
+        
+        String name = '';
+        for (final candidate in candidates) {
+          if (candidate != null && candidate is String && candidate.trim().isNotEmpty) {
+            name = candidate.trim();
+            break;
+          }
+        }
+        
         if (name.isNotEmpty) {
           coaches.add({
             'id': coachDoc.id,
             'name': name,
+          });
+        } else {
+          // Even if no name, show the user ID so admin can see them
+          coaches.add({
+            'id': coachDoc.id,
+            'name': 'Coach (${coachDoc.id.substring(0, 8)}...)',
           });
         }
       }
 
       // Sort coaches by name
       coaches.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
+      
+      debugPrint('🔍 Found ${coachesSnapshot.docs.length} users with role=Coach');
+      debugPrint('🔍 After name resolution: ${coaches.length} coaches available');
+      if (coaches.isEmpty) {
+        debugPrint('⚠️ No coaches found in dropdown!');
+      }
     } catch (e) {
       debugPrint('Failed to load coaches: $e');
     }
 
     if (!mounted) return;
 
-    String? selectedCoachId;
+    String? selectedCoachId = data.coachId;
 
     await showDialog(
       context: context,
@@ -12556,23 +12736,39 @@ class _AdminMemberManagementViewState
       final newCoachRef =
           FirebaseFirestore.instance.collection('users').doc(newCoachId);
 
-      // Find existing member_coach relationship
-      final existingRelation = await FirebaseFirestore.instance
+      // STEP 1: Remove from any existing coach's membersAssigned list
+      final existingRelations = await FirebaseFirestore.instance
           .collection('member_coach')
-          .where('member', isEqualTo: memberRef)
+          .where('membersAssigned', arrayContains: memberRef)
           .get();
 
-      // Delete old relationship
-      for (final doc in existingRelation.docs) {
-        await doc.reference.delete();
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in existingRelations.docs) {
+        batch.update(doc.reference, {
+          'membersAssigned': FieldValue.arrayRemove([memberRef]),
+          'updated_at': FieldValue.serverTimestamp(),
+        });
       }
+      await batch.commit();
 
-      // Create new relationship
-      await FirebaseFirestore.instance.collection('member_coach').add({
-        'member': memberRef,
-        'coach': newCoachRef,
-        'assigned_at': FieldValue.serverTimestamp(),
-      });
+      // STEP 2: Add to new coach's membersAssigned list
+      final coachDocs = await _findCoachDocument(newCoachRef);
+
+      if (coachDocs.isNotEmpty) {
+        // Document exists - update membersAssigned array
+        await coachDocs.first.reference.update({
+          'membersAssigned': FieldValue.arrayUnion([memberRef]),
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      } else {
+        // No document exists - create new one
+        await FirebaseFirestore.instance.collection('member_coach').add({
+          'coachref': newCoachRef,
+          'membersAssigned': [memberRef],
+          'assigned_at': FieldValue.serverTimestamp(),
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -12698,15 +12894,20 @@ class _AdminMemberManagementViewState
       final memberRef =
           FirebaseFirestore.instance.collection('users').doc(memberId);
 
-      // Find and delete member_coach relationship
-      final existingRelation = await FirebaseFirestore.instance
+      // Find all coach documents containing this member and remove them
+      final existingRelations = await FirebaseFirestore.instance
           .collection('member_coach')
-          .where('member', isEqualTo: memberRef)
+          .where('membersAssigned', arrayContains: memberRef)
           .get();
 
-      for (final doc in existingRelation.docs) {
-        await doc.reference.delete();
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in existingRelations.docs) {
+        batch.update(doc.reference, {
+          'membersAssigned': FieldValue.arrayRemove([memberRef]),
+          'updated_at': FieldValue.serverTimestamp(),
+        });
       }
+      await batch.commit();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -12925,12 +13126,6 @@ class _AdminMemberManagementViewState
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.arrow_drop_down,
-                color: Color(0xFF6B7280),
-                size: 20,
               ),
             ],
           ),
@@ -13857,6 +14052,7 @@ class _CreateUserFormData {
     required this.email,
     required this.role,
     required this.agency,
+    required this.agencyName,
     required this.password,
     required this.confirmPassword,
   });
@@ -13867,6 +14063,7 @@ class _CreateUserFormData {
   final String email;
   final String role;
   final String agency;
+  final String agencyName;
   final String password;
   final String confirmPassword;
 }
@@ -13906,25 +14103,53 @@ class _AdminCreateUsersDialogState extends State<_AdminCreateUsersDialog> {
   }
 
   Future<void> _loadAgencies() async {
+    debugPrint('📄 Loading agencies for Create User dialog...');
+    setState(() => _loadingAgencies = true);
+
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('agencies').get();
-      setState(() {
-        _agencies = snapshot.docs.map((doc) {
-          final data = doc.data();
-          return {
-            'id': doc.id,
-            'name': (data['agency_name'] ?? data['name'] ?? 'Unknown Agency')
-                as String,
-          };
-        }).toList();
-        _loadingAgencies = false;
-      });
+      // Use a timeout to prevent infinite loading
+      final snapshot = await FirebaseFirestore.instance
+          .collection('agencies')
+          .snapshots()
+          .take(1)
+          .single
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('✅ Agencies loaded: ${snapshot.docs.length} docs found.');
+
+      if (mounted) {
+        setState(() {
+          _agencies = snapshot.docs.map((doc) {
+            final data = doc.data();
+            return {
+              'id': doc.id,
+              'name': (data['agency_name'] ?? data['name'] ?? 'Unknown Agency')
+                  as String,
+            };
+          }).toList();
+
+          // Sort agencies alphabetically
+          _agencies.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
+
+          _loadingAgencies = false;
+        });
+      }
     } catch (e) {
-      print('Error loading agencies: \$e');
-      setState(() => _loadingAgencies = false);
+      debugPrint('❌ Error loading agencies: $e');
+      if (mounted) {
+        setState(() => _loadingAgencies = false);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load agencies: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
-  }
+
+    }
+
 
   @override
   void dispose() {
@@ -13946,6 +14171,13 @@ class _AdminCreateUsersDialogState extends State<_AdminCreateUsersDialog> {
         email: _emailController.text.trim(),
         role: (_selectedRole ?? '').trim(),
         agency: (_selectedAgency ?? '').trim(),
+        agencyName: (_selectedAgency != null
+                ? _agencies.firstWhere(
+                    (element) => element['id'] == _selectedAgency,
+                    orElse: () => {'name': ''},
+                  )['name']
+                : '') ??
+            '',
         password: _passwordController.text,
         confirmPassword: _confirmPasswordController.text,
       ),
