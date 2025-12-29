@@ -15943,6 +15943,879 @@ class _AdminPlaceholderView extends StatelessWidget {
   }
 }
 
+/// Dialog widget for editing existing course content and managing video modules.
+class _AdminEditContentDialog extends StatefulWidget {
+  const _AdminEditContentDialog({
+    super.key,
+    required this.course,
+    required this.onCancel,
+    required this.onSubmit,
+  });
+
+  final _LibraryCardData course;
+  final VoidCallback onCancel;
+  final VoidCallback onSubmit;
+
+  @override
+  State<_AdminEditContentDialog> createState() =>
+      _AdminEditContentDialogState();
+}
+
+class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
+  static const Color _titleColor = Color(0xFF0A1B47);
+  static const Color _mutedColor = Color(0xFF6B7280);
+  static const Color _accentBlue = Color(0xFF2563EB);
+
+  late final TextEditingController _courseNameController;
+  late final TextEditingController _descriptionController;
+  String? _selectedTopic;
+
+  bool _isSaving = false;
+  String? _errorMessage;
+
+  // Module management
+  List<Map<String, dynamic>> _modules = [];
+  bool _isLoadingModules = true;
+
+  // Video upload state for modules
+  Map<int, PlatformFile?> _moduleVideoFiles = {};
+  Map<int, double> _moduleUploadProgress = {};
+  Map<int, bool> _moduleUploading = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final data = widget.course.originalData;
+    _courseNameController =
+        TextEditingController(text: data['course_name'] ?? data['title'] ?? '');
+    _descriptionController =
+        TextEditingController(text: data['description'] ?? '');
+    _selectedTopic = data['topic'];
+
+    // Load video modules asynchronously from DocumentReferences
+    _loadVideoModules();
+  }
+
+  /// Loads video modules from the 'videos' field which contains DocumentReferences
+  Future<void> _loadVideoModules() async {
+    try {
+      final videosField = widget.course.originalData['videos'];
+      if (videosField is! List) {
+        setState(() => _isLoadingModules = false);
+        return;
+      }
+
+      // Extract video IDs from DocumentReferences
+      List<String> videoIds = [];
+      for (final item in videosField) {
+        if (item is DocumentReference) {
+          videoIds.add(item.id);
+        } else if (item is String && item.isNotEmpty) {
+          // Direct ID string
+          if (item.startsWith('/video/') || item.startsWith('/videos/')) {
+            videoIds.add(item.split('/').last);
+          } else {
+            videoIds.add(item);
+          }
+        }
+      }
+
+      // Fetch video documents
+      final modules = <Map<String, dynamic>>[];
+      final videoCollection = FirebaseFirestore.instance.collection('video');
+      final videosCollection = FirebaseFirestore.instance.collection('videos');
+
+      for (final id in videoIds) {
+        try {
+          // Try 'video' collection first
+          var doc = await videoCollection.doc(id).get();
+          if (!doc.exists) {
+            // Try 'videos' collection
+            doc = await videosCollection.doc(id).get();
+          }
+          if (doc.exists) {
+            final data = doc.data()!;
+            modules.add({
+              'id': doc.id,
+              'title': data['title'] ?? data['course_name'] ?? data['video_title'] ?? '',
+              'videoUrl': data['videoUrl'] ?? data['video_url'] ?? '',
+              'description': data['description'] ?? data['video_description'] ?? '',
+            });
+          }
+        } catch (e) {
+          debugPrint('Error fetching video module $id: $e');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _modules = modules;
+          _isLoadingModules = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading video modules: $e');
+      if (mounted) {
+        setState(() => _isLoadingModules = false);
+      }
+    }
+  }
+
+  /// Pick a video file for a specific module
+  Future<void> _pickVideoForModule(int index) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        withData: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _moduleVideoFiles[index] = result.files.first;
+        });
+        // Start upload immediately after picking
+        await _uploadVideoForModule(index);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error selecting video: $e')),
+        );
+      }
+    }
+  }
+
+  /// Upload video for a specific module to Firebase Storage
+  Future<void> _uploadVideoForModule(int index) async {
+    final file = _moduleVideoFiles[index];
+    if (file == null || file.bytes == null) return;
+
+    setState(() {
+      _moduleUploading[index] = true;
+      _moduleUploadProgress[index] = 0;
+    });
+
+    try {
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final storagePath = 'video/$fileName';
+      final contentType = _getVideoContentType(file.extension);
+
+      debugPrint('📤 Starting upload to $storagePath');
+      final storageRef = FirebaseStorage.instance.ref().child(storagePath);
+      final uploadTask = storageRef.putData(
+        file.bytes!,
+        SettableMetadata(contentType: contentType),
+      );
+
+      uploadTask.snapshotEvents.listen((snapshot) {
+        final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+        if (mounted) {
+          setState(() {
+            _moduleUploadProgress[index] = progress;
+          });
+        }
+      });
+
+      final snapshot = await uploadTask;
+      final url = await snapshot.ref.getDownloadURL();
+      debugPrint('✅ Upload complete: $url');
+
+      if (mounted) {
+        setState(() {
+          _modules[index]['videoUrl'] = url;
+          _moduleUploading[index] = false;
+          _moduleVideoFiles[index] = null;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Error uploading video: $e');
+      if (mounted) {
+        setState(() {
+          _moduleUploading[index] = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload video: $e')),
+        );
+      }
+    }
+  }
+
+  String _getVideoContentType(String? extension) {
+    if (extension == null) return 'video/mp4';
+    final ext = extension.toLowerCase();
+    switch (ext) {
+      case 'mp4':
+        return 'video/mp4';
+      case 'mov':
+        return 'video/quicktime';
+      case 'avi':
+        return 'video/x-msvideo';
+      case 'webm':
+        return 'video/webm';
+      default:
+        return 'video/mp4';
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  /// Builds the video upload section for a module
+  Widget _buildVideoUploadSection(int index, Map<String, dynamic> module) {
+    final isUploading = _moduleUploading[index] == true;
+    final progress = _moduleUploadProgress[index] ?? 0;
+    final selectedFile = _moduleVideoFiles[index];
+    final currentVideoUrl = module['videoUrl'] as String?;
+    final hasVideo = currentVideoUrl != null && currentVideoUrl.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (isUploading) ...[
+            // Uploading state
+            Row(
+              children: [
+                const Icon(Icons.cloud_upload, color: _accentBlue, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Uploading ${selectedFile?.name ?? "video"}...',
+                    style: const TextStyle(
+                      color: _titleColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(
+                  '${(progress * 100).toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                    color: _accentBlue,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: const Color(0xFFE2E8F0),
+                valueColor: const AlwaysStoppedAnimation<Color>(_accentBlue),
+                minHeight: 6,
+              ),
+            ),
+          ] else if (hasVideo) ...[
+            // Has existing video
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCFCE7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.videocam, color: Color(0xFF22C55E), size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Video uploaded',
+                        style: TextStyle(
+                          color: Color(0xFF22C55E),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        _extractFilename(currentVideoUrl),
+                        style: const TextStyle(
+                          color: _mutedColor,
+                          fontSize: 11,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _pickVideoForModule(index),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Replace'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: _accentBlue,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            // No video - show upload button
+            InkWell(
+              onTap: () => _pickVideoForModule(index),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDBEAFE),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.add, color: _accentBlue, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Upload Video',
+                      style: TextStyle(
+                        color: _accentBlue,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _extractFilename(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final pathSegments = uri.pathSegments;
+      if (pathSegments.isNotEmpty) {
+        final filename = pathSegments.last;
+        // Decode URL encoding and extract just the file name
+        final decoded = Uri.decodeComponent(filename);
+        // Remove timestamp prefix if present (e.g., "1234567890_video.mp4" -> "video.mp4")
+        final parts = decoded.split('_');
+        if (parts.length > 1 && int.tryParse(parts.first) != null) {
+          return parts.sublist(1).join('_');
+        }
+        return decoded;
+      }
+    } catch (e) {
+      debugPrint('Error extracting filename: $e');
+    }
+    return 'video';
+  }
+
+  @override
+  void dispose() {
+    _courseNameController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: _mutedColor, fontSize: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: _accentBlue, width: 2),
+      ),
+    );
+  }
+
+  Widget _buildLabeledField({
+    required String label,
+    required Widget child,
+    String? helperText,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: _titleColor,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        child,
+        if (helperText != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            helperText,
+            style: const TextStyle(color: _mutedColor, fontSize: 12),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _saveChanges() async {
+    if (_courseNameController.text.trim().isEmpty) {
+      setState(() {
+        _errorMessage = 'Course name is required';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final updateData = <String, dynamic>{
+        'course_name': _courseNameController.text.trim(),
+        'title': _courseNameController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'topic': _selectedTopic,
+        'modules': _modules,
+        'updated_at': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('video')
+          .doc(widget.course.id)
+          .update(updateData);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Course updated successfully!'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+        widget.onSubmit();
+      }
+    } catch (e) {
+      debugPrint('Error saving course: $e');
+      setState(() {
+        _errorMessage = 'Failed to save changes. Please try again.';
+        _isSaving = false;
+      });
+    }
+  }
+
+  void _addModule() {
+    setState(() {
+      _modules.add({
+        'title': 'New Module ${_modules.length + 1}',
+        'description': '',
+        'videoUrl': '',
+        'duration': '',
+      });
+    });
+  }
+
+  void _removeModule(int index) {
+    setState(() {
+      _modules.removeAt(index);
+    });
+  }
+
+  void _updateModule(int index, String field, String value) {
+    setState(() {
+      _modules[index][field] = value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 40,
+              offset: Offset(0, 20),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFE6EEFF), Color(0xFFD8F8F5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x1A000000),
+                          blurRadius: 12,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.edit_outlined,
+                        color: _accentBlue, size: 24),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Edit Course',
+                          style: TextStyle(
+                            color: _titleColor,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Update course details and manage video modules',
+                          style: TextStyle(
+                            color: _titleColor.withOpacity(0.7),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: widget.onCancel,
+                    icon: const Icon(Icons.close, color: _mutedColor),
+                  ),
+                ],
+              ),
+            ),
+            // Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_errorMessage != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline,
+                                color: Color(0xFFEF4444), size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(
+                                    color: Color(0xFFEF4444), fontSize: 14),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // Course details section
+                    _buildLabeledField(
+                      label: 'Course Name',
+                      child: TextField(
+                        controller: _courseNameController,
+                        decoration: _inputDecoration('Enter course name'),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildLabeledField(
+                      label: 'Topic',
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedTopic,
+                        items: const [
+                          DropdownMenuItem(value: 'THINK', child: Text('THINK')),
+                          DropdownMenuItem(value: 'KEEP', child: Text('KEEP')),
+                          DropdownMenuItem(value: 'ACCELERATE', child: Text('ACCELERATE')),
+                          DropdownMenuItem(value: 'TRANSFORM', child: Text('TRANSFORM')),
+                          DropdownMenuItem(value: 'ABUNDANCE', child: Text('ABUNDANCE')),
+                          DropdownMenuItem(value: 'Expert Series', child: Text('Expert Series')),
+                          DropdownMenuItem(value: 'Immersive Footage', child: Text('Immersive Footage')),
+                        ],
+                        decoration: _inputDecoration('Select topic'),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedTopic = value;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildLabeledField(
+                      label: 'Description',
+                      child: TextField(
+                        controller: _descriptionController,
+                        decoration: _inputDecoration('Enter course description'),
+                        maxLines: 3,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Modules section
+                    Row(
+                      children: [
+                        const Text(
+                          'Video Modules',
+                          style: TextStyle(
+                            color: _titleColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: _addModule,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add Module'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: _accentBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (_isLoadingModules)
+                      Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Center(
+                          child: Column(
+                            children: const [
+                              SizedBox(
+                                width: 32,
+                                height: 32,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'Loading video modules...',
+                                style: TextStyle(
+                                  color: _mutedColor,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (_modules.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              const Icon(Icons.video_library_outlined,
+                                  size: 48, color: _mutedColor),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'No modules yet',
+                                style: TextStyle(
+                                  color: _mutedColor,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: _addModule,
+                                child: const Text('Add your first module'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      ...List.generate(_modules.length, (index) {
+                        final module = _modules[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: _accentBlue.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '${index + 1}',
+                                      style: const TextStyle(
+                                        color: _accentBlue,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: TextEditingController(
+                                          text: module['title'] ?? ''),
+                                      decoration: _inputDecoration('Module title'),
+                                      onChanged: (value) =>
+                                          _updateModule(index, 'title', value),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    onPressed: () => _removeModule(index),
+                                    icon: const Icon(Icons.delete_outline,
+                                        color: Color(0xFFEF4444)),
+                                    tooltip: 'Remove module',
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Video upload section instead of URL field
+                              _buildVideoUploadSection(index, module),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: TextEditingController(
+                                    text: module['description'] ?? ''),
+                                decoration: _inputDecoration('Module description'),
+                                maxLines: 2,
+                                onChanged: (value) =>
+                                    _updateModule(index, 'description', value),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              ),
+            ),
+            // Footer
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: widget.onCancel,
+                    style: TextButton.styleFrom(
+                      foregroundColor: _mutedColor,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 14),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: _isSaving ? null : _saveChanges,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accentBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 28, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text(
+                            'Save Changes',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AdminAgencyCardData {
   const _AdminAgencyCardData({
     this.id,
@@ -39058,6 +39931,9 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                 onDeleteTap: widget.isAdmin
                     ? (course) => _confirmDeleteContent(context, course)
                     : null,
+                onEditTap: widget.isAdmin
+                    ? (course) => _showEditContentDialog(context, course)
+                    : null,
               ),
               const SizedBox(height: 36),
               const _SectionTitle(label: 'Continue Learning'),
@@ -39079,6 +39955,9 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                     _attemptLibraryCourseDownload(context, course),
                 onDeleteTap: widget.isAdmin
                     ? (course) => _confirmDeleteContent(context, course)
+                    : null,
+                onEditTap: widget.isAdmin
+                    ? (course) => _showEditContentDialog(context, course)
                     : null,
               ),
               const SizedBox(height: 36),
@@ -39112,6 +39991,9 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                     _attemptLibraryCourseDownload(context, course),
                 onDeleteTap: widget.isAdmin
                     ? (course) => _confirmDeleteContent(context, course)
+                    : null,
+                onEditTap: widget.isAdmin
+                    ? (course) => _showEditContentDialog(context, course)
                     : null,
               ),
             ],
@@ -39206,6 +40088,31 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
         ),
       );
     }
+  }
+
+  void _showEditContentDialog(
+      BuildContext context, _LibraryCardData course) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.5),
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800, maxHeight: 900),
+            child: _AdminEditContentDialog(
+              course: course,
+              onCancel: () => Navigator.of(context).pop(),
+              onSubmit: () {
+                Navigator.of(context).pop();
+                setState(() {}); // Trigger rebuild to refresh list
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _attemptCourseDownload(
@@ -42272,6 +43179,7 @@ class _LibraryGrid extends StatelessWidget {
     this.onCardTap,
     this.onDownloadTap,
     this.onDeleteTap,
+    this.onEditTap,
   });
 
   final List<_LibraryCardData> items;
@@ -42280,6 +43188,7 @@ class _LibraryGrid extends StatelessWidget {
   final _LibraryCardTap? onCardTap;
   final ValueChanged<_LibraryCardData>? onDownloadTap;
   final ValueChanged<_LibraryCardData>? onDeleteTap;
+  final ValueChanged<_LibraryCardData>? onEditTap;
 
   @override
   Widget build(BuildContext context) {
@@ -42290,7 +43199,7 @@ class _LibraryGrid extends StatelessWidget {
         crossAxisCount: columns,
         mainAxisSpacing: 24,
         crossAxisSpacing: 24,
-        childAspectRatio: columns > 1 ? 0.82 : 0.9,
+        childAspectRatio: columns > 1 ? 0.72 : 0.8,
       ),
       itemCount: items.length,
       itemBuilder: (context, index) {
@@ -42302,6 +43211,7 @@ class _LibraryGrid extends StatelessWidget {
           onDownloadTap:
               onDownloadTap == null ? null : () => onDownloadTap!(item),
           onDeleteTap: onDeleteTap == null ? null : () => onDeleteTap!(item),
+          onEdit: onEditTap == null ? null : () => onEditTap!(item),
         );
       },
     );
@@ -42458,6 +43368,7 @@ class _FirestoreCourseGrid extends StatelessWidget {
     this.onCardTap,
     this.onDownloadTap,
     this.onDeleteTap,
+    this.onEditTap,
   });
 
   final int columns;
@@ -42472,6 +43383,7 @@ class _FirestoreCourseGrid extends StatelessWidget {
   final _LibraryCardTap? onCardTap;
   final ValueChanged<_LibraryCardData>? onDownloadTap;
   final ValueChanged<_LibraryCardData>? onDeleteTap;
+  final ValueChanged<_LibraryCardData>? onEditTap;
 
   static const Map<String, Color> _topicColors = {
     'think': Color(0xFF1E3A8A),
@@ -42681,6 +43593,7 @@ class _FirestoreCourseGrid extends StatelessWidget {
           onCardTap: onCardTap,
           onDownloadTap: onDownloadTap,
           onDeleteTap: onDeleteTap,
+          onEditTap: onEditTap,
         );
       },
     );
@@ -47223,6 +48136,7 @@ class _LibraryCard extends StatelessWidget {
     this.onTap,
     this.onDownloadTap,
     this.onDeleteTap,
+    this.onEdit,
   });
 
   final _LibraryCardData data;
@@ -47230,6 +48144,7 @@ class _LibraryCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onDownloadTap;
   final VoidCallback? onDeleteTap;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -47506,20 +48421,37 @@ class _LibraryCard extends StatelessWidget {
                                 fontWeight: FontWeight.w600, fontSize: 13),
                           ),
                         ),
-                        if (isAdmin && onDeleteTap != null) ...[
-                          const SizedBox(width: 12),
-                          IconButton(
-                            onPressed: onDeleteTap,
-                            icon: const Icon(Icons.delete_outline, size: 22),
-                            style: IconButton.styleFrom(
-                              foregroundColor: const Color(0xFFEF4444),
-                              backgroundColor: const Color(0xFFFEE2E2),
-                              padding: const EdgeInsets.all(12),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
+                        if (isAdmin) ...[
+                          if (onEdit != null) ...[
+                            const SizedBox(width: 12),
+                            IconButton(
+                              onPressed: onEdit,
+                              icon: const Icon(Icons.edit_outlined, size: 22),
+                              style: IconButton.styleFrom(
+                                foregroundColor: const Color(0xFF3B82F6),
+                                backgroundColor: const Color(0xFFDBEAFE),
+                                padding: const EdgeInsets.all(12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                              tooltip: 'Edit content',
                             ),
-                            tooltip: 'Delete content',
-                          ),
+                          ],
+                          if (onDeleteTap != null) ...[
+                            const SizedBox(width: 12),
+                            IconButton(
+                              onPressed: onDeleteTap,
+                              icon: const Icon(Icons.delete_outline, size: 22),
+                              style: IconButton.styleFrom(
+                                foregroundColor: const Color(0xFFEF4444),
+                                backgroundColor: const Color(0xFFFEE2E2),
+                                padding: const EdgeInsets.all(12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                              tooltip: 'Delete content',
+                            ),
+                          ],
                         ],
                       ],
                     ),
