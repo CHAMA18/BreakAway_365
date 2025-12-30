@@ -18877,28 +18877,59 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
     final coachRef = firestore.collection('users').doc(currentUser.uid);
 
     // Count active members assigned to this coach from member_coach collection
-    final memberCoachSnapshot = await firestore
+    var memberCoachSnapshot = await firestore
         .collection('member_coach')
-        .where('coach', isEqualTo: coachRef)
+        .where('coachref', isEqualTo: coachRef)
         .get();
+    
+    // Fallback to 'coach' field if 'coachref' returns empty
+    if (memberCoachSnapshot.docs.isEmpty) {
+      memberCoachSnapshot = await firestore
+          .collection('member_coach')
+          .where('coach', isEqualTo: coachRef)
+          .get();
+    }
 
+    // Extract member IDs from both single references and arrays
     final List<String> memberIds = [];
     for (final doc in memberCoachSnapshot.docs) {
-      final memberRef = doc.data()['member'] as DocumentReference?;
-      if (memberRef != null) {
-        memberIds.add(memberRef.id);
+      final data = doc.data();
+      
+      // Check for membersAssigned array (multiple members)
+      final membersAssigned = data['membersAssigned'] as List<dynamic>?;
+      if (membersAssigned != null && membersAssigned.isNotEmpty) {
+        for (final memberItem in membersAssigned) {
+          if (memberItem is DocumentReference) {
+            memberIds.add(memberItem.id);
+          } else if (memberItem is Map<String, dynamic> && memberItem['member'] is DocumentReference) {
+            memberIds.add((memberItem['member'] as DocumentReference).id);
+          }
+        }
+      } else {
+        // Check for single member reference
+        final memberRef = data['memberref'] as DocumentReference? ?? data['member'] as DocumentReference?;
+        if (memberRef != null) {
+          memberIds.add(memberRef.id);
+        }
       }
     }
-    final activeMembersCount = memberIds.length;
+    final activeMembersCount = memberIds.toSet().length; // Use set to avoid duplicates
 
-    // Count upcoming sessions for this coach
+    // Count upcoming session notes (session notes with future dates)
+    final now = Timestamp.now();
     final sessionsSnapshot = await firestore
-        .collection('sessions')
+        .collection('coachingNotes')
         .where('coachId', isEqualTo: currentUser.uid)
-        .where('date', isGreaterThanOrEqualTo: Timestamp.now())
+        .where('noteType', isEqualTo: 'Session Note')
         .get();
 
-    final upcomingSessionsCount = sessionsSnapshot.docs.length;
+    // Filter for sessions with dates in the future
+    final upcomingSessions = sessionsSnapshot.docs.where((doc) {
+      final sessionDate = doc.data()['sessionDate'] as Timestamp?;
+      return sessionDate != null && sessionDate.compareTo(now) > 0;
+    }).toList();
+    
+    final upcomingSessionsCount = upcomingSessions.length;
 
     // Calculate average engagement from module completions for assigned members
     double totalEngagement = 0.0;
@@ -19023,23 +19054,6 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF111827),
                       ),
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 16),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
-                    ),
-                    onPressed: () {},
-                    icon: const Icon(Icons.add),
-                    label: const Text(
-                      'New Session',
-                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -22410,11 +22424,12 @@ class _NoteDetailDialog extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text(
-                          'For: $memberName',
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 14),
-                        ),
+                        if (memberName != 'Unknown' && memberName.isNotEmpty)
+                          Text(
+                            'For: $memberName',
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 14),
+                          ),
                       ],
                     ),
                   ),
@@ -24777,7 +24792,7 @@ class _ProfilePageState extends State<ProfilePage> {
         'last_name': _lastNameController.text.trim(),
         'username': _usernameController.text.trim(),
         'phone': _phoneController.text.trim(),
-        'agency': _companyController.text.trim(),
+        // Removed agency/company update to prevent unauthorized changes
         'bio': _bioController.text.trim(),
         'linkedin': _linkedinController.text.trim(),
         'twitter': _twitterController.text.trim(),
@@ -24903,7 +24918,8 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _field(String label,
       {required TextEditingController controller,
       String? hintText,
-      int maxLines = 1}) {
+      int maxLines = 1,
+      bool enabled = true}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -24919,10 +24935,11 @@ class _ProfilePageState extends State<ProfilePage> {
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          enabled: enabled,
           maxLines: maxLines,
           minLines: maxLines > 1 ? maxLines : null,
-          style: const TextStyle(
-            color: ProfilePage._titleColor,
+          style: TextStyle(
+            color: enabled ? ProfilePage._titleColor : ProfilePage._mutedColor,
             fontSize: 15,
             fontWeight: FontWeight.w500,
           ),
@@ -25044,7 +25061,7 @@ class _ProfilePageState extends State<ProfilePage> {
           emailPhoneRow = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _field('EMAIL', controller: _emailController),
+              _field('EMAIL', controller: _emailController, enabled: false),
               const SizedBox(height: 24),
               _field('Phone',
                   controller: _phoneController, hintText: 'Phone number'),
@@ -25054,7 +25071,9 @@ class _ProfilePageState extends State<ProfilePage> {
           emailPhoneRow = Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _field('EMAIL', controller: _emailController)),
+              Expanded(
+                  child: _field('EMAIL',
+                      controller: _emailController, enabled: false)),
               const SizedBox(width: 24),
               Expanded(
                   child: _field('Phone',
@@ -25100,7 +25119,9 @@ class _ProfilePageState extends State<ProfilePage> {
             emailPhoneRow,
             const SizedBox(height: 24),
             _field('Company/Agency',
-                controller: _companyController, hintText: 'add to agency'),
+                controller: _companyController,
+                hintText: 'add to agency',
+                enabled: false),
             const SizedBox(height: 24),
             _field('Bio',
                 controller: _bioController,
