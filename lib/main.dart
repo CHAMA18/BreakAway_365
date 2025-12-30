@@ -20070,28 +20070,86 @@ class _GoalSettingToolCardState extends State<_GoalSettingToolCard> {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .where('coach',
-            isEqualTo: FirebaseFirestore.instance
-                .collection('users')
-                .doc(currentUser.uid))
-        .get();
+    try {
+      final currentUserRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid);
 
-    if (mounted) {
-      setState(() {
-        _members = snapshot.docs.map((doc) {
-          final data = doc.data();
-          final firstName = data['firstName'] as String? ?? '';
-          final lastName = data['lastName'] as String? ?? '';
-          final displayName =
-              data['displayName'] as String? ?? '$firstName $lastName'.trim();
-          return {
-            'id': doc.id,
-            'name': displayName.isNotEmpty ? displayName : 'Member',
-          };
-        }).toList();
-      });
+      // Query member_coach collection for documents where coach is current user
+      var coachDocs = await FirebaseFirestore.instance
+          .collection('member_coach')
+          .where('coachref', isEqualTo: currentUserRef)
+          .get();
+
+      // Also check for 'coach' field as a fallback
+      if (coachDocs.docs.isEmpty) {
+        coachDocs = await FirebaseFirestore.instance
+            .collection('member_coach')
+            .where('coach', isEqualTo: currentUserRef)
+            .get();
+      }
+
+      final Set<String> memberIds = {};
+
+      // Extract member IDs from all matching coach documents
+      for (final coachDoc in coachDocs.docs) {
+        final data = coachDoc.data();
+        
+        // Handle single member reference (legacy)
+        final memberRef = data['memberref'] as DocumentReference?
+            ?? data['member'] as DocumentReference?;
+        if (memberRef != null) {
+          memberIds.add(memberRef.id);
+        }
+
+        // Handle multiple members assigned (current structure)
+        final membersAssigned = data['membersAssigned'] as List<dynamic>?;
+        if (membersAssigned != null) {
+          for (final memberRefItem in membersAssigned) {
+            if (memberRefItem is DocumentReference) {
+              memberIds.add(memberRefItem.id);
+            }
+          }
+        }
+      }
+
+      // Fetch user details for each member
+      final List<Map<String, dynamic>> members = [];
+      for (final memberId in memberIds) {
+        try {
+          final memberDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(memberId)
+              .get();
+          
+          if (memberDoc.exists) {
+            final data = memberDoc.data()!;
+            final firstName = data['firstName'] as String? ?? '';
+            final lastName = data['lastName'] as String? ?? '';
+            final displayName =
+                data['displayName'] as String? ?? '$firstName $lastName'.trim();
+            members.add({
+              'id': memberId,
+              'name': displayName.isNotEmpty ? displayName : 'Member',
+            });
+          }
+        } catch (e) {
+          debugPrint('Error loading member $memberId: $e');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _members = members;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading members: $e');
+      if (mounted) {
+        setState(() {
+          _members = [];
+        });
+      }
     }
   }
 
@@ -20720,28 +20778,86 @@ class _SessionDetailsCardState extends State<_SessionDetailsCard> {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .where('coach',
-            isEqualTo: FirebaseFirestore.instance
-                .collection('users')
-                .doc(currentUser.uid))
-        .get();
+    try {
+      final currentUserRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid);
 
-    if (mounted) {
-      setState(() {
-        _members = snapshot.docs.map((doc) {
-          final data = doc.data();
-          final firstName = data['firstName'] as String? ?? '';
-          final lastName = data['lastName'] as String? ?? '';
-          final displayName =
-              data['displayName'] as String? ?? '$firstName $lastName'.trim();
-          return {
-            'id': doc.id,
-            'name': displayName.isNotEmpty ? displayName : 'Member',
-          };
-        }).toList();
-      });
+      // Query member_coach collection for documents where coach is current user
+      var coachDocs = await FirebaseFirestore.instance
+          .collection('member_coach')
+          .where('coachref', isEqualTo: currentUserRef)
+          .get();
+
+      // Also check for 'coach' field as a fallback
+      if (coachDocs.docs.isEmpty) {
+        coachDocs = await FirebaseFirestore.instance
+            .collection('member_coach')
+            .where('coach', isEqualTo: currentUserRef)
+            .get();
+      }
+
+      final Set<String> memberIds = {};
+
+      // Extract member IDs from all matching coach documents
+      for (final coachDoc in coachDocs.docs) {
+        final data = coachDoc.data();
+        
+        // Handle single member reference (legacy)
+        final memberRef = data['memberref'] as DocumentReference?
+            ?? data['member'] as DocumentReference?;
+        if (memberRef != null) {
+          memberIds.add(memberRef.id);
+        }
+
+        // Handle multiple members assigned (current structure)
+        final membersAssigned = data['membersAssigned'] as List<dynamic>?;
+        if (membersAssigned != null) {
+          for (final memberRefItem in membersAssigned) {
+            if (memberRefItem is DocumentReference) {
+              memberIds.add(memberRefItem.id);
+            }
+          }
+        }
+      }
+
+      // Fetch user details for each member
+      final List<Map<String, dynamic>> members = [];
+      for (final memberId in memberIds) {
+        try {
+          final memberDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(memberId)
+              .get();
+          
+          if (memberDoc.exists) {
+            final data = memberDoc.data()!;
+            final firstName = data['firstName'] as String? ?? '';
+            final lastName = data['lastName'] as String? ?? '';
+            final displayName =
+                data['displayName'] as String? ?? '$firstName $lastName'.trim();
+            members.add({
+              'id': memberId,
+              'name': displayName.isNotEmpty ? displayName : 'Member',
+            });
+          }
+        } catch (e) {
+          debugPrint('Error loading member $memberId: $e');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _members = members;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading members: $e');
+      if (mounted) {
+        setState(() {
+          _members = [];
+        });
+      }
     }
   }
 
@@ -21790,21 +21906,68 @@ class _CreateNoteDialogState extends State<_CreateNoteDialog> {
     }
 
     try {
-      final firestore = FirebaseFirestore.instance;
-      final membersSnapshot = await firestore
+      final currentUserRef = FirebaseFirestore.instance
           .collection('users')
-          .where('coach',
-              isEqualTo: firestore.collection('users').doc(currentUser.uid))
+          .doc(currentUser.uid);
+
+      // Query member_coach collection for documents where coach is current user
+      var coachDocs = await FirebaseFirestore.instance
+          .collection('member_coach')
+          .where('coachref', isEqualTo: currentUserRef)
           .get();
 
+      // Also check for 'coach' field as a fallback
+      if (coachDocs.docs.isEmpty) {
+        coachDocs = await FirebaseFirestore.instance
+            .collection('member_coach')
+            .where('coach', isEqualTo: currentUserRef)
+            .get();
+      }
+
+      final Set<String> memberIds = {};
+
+      // Extract member IDs from all matching coach documents
+      for (final coachDoc in coachDocs.docs) {
+        final data = coachDoc.data();
+        
+        // Handle single member reference (legacy)
+        final memberRef = data['memberref'] as DocumentReference?
+            ?? data['member'] as DocumentReference?;
+        if (memberRef != null) {
+          memberIds.add(memberRef.id);
+        }
+
+        // Handle multiple members assigned (current structure)
+        final membersAssigned = data['membersAssigned'] as List<dynamic>?;
+        if (membersAssigned != null) {
+          for (final memberRefItem in membersAssigned) {
+            if (memberRefItem is DocumentReference) {
+              memberIds.add(memberRefItem.id);
+            }
+          }
+        }
+      }
+
+      // Fetch user details for each member
       final members = <Map<String, String>>[];
-      for (final doc in membersSnapshot.docs) {
-        final data = doc.data();
-        final firstName = data['firstName'] as String? ?? '';
-        final lastName = data['lastName'] as String? ?? '';
-        final fullName = '$firstName $lastName'.trim();
-        if (fullName.isNotEmpty) {
-          members.add({'id': doc.id, 'name': fullName});
+      for (final memberId in memberIds) {
+        try {
+          final memberDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(memberId)
+              .get();
+          
+          if (memberDoc.exists) {
+            final data = memberDoc.data()!;
+            final firstName = data['firstName'] as String? ?? '';
+            final lastName = data['lastName'] as String? ?? '';
+            final fullName = '$firstName $lastName'.trim();
+            if (fullName.isNotEmpty) {
+              members.add({'id': memberId, 'name': fullName});
+            }
+          }
+        } catch (e) {
+          debugPrint('Error loading member $memberId: $e');
         }
       }
 
@@ -21813,6 +21976,7 @@ class _CreateNoteDialogState extends State<_CreateNoteDialog> {
         _isLoadingMembers = false;
       });
     } catch (e) {
+      debugPrint('Error loading members: $e');
       setState(() => _isLoadingMembers = false);
     }
   }
@@ -54133,7 +54297,6 @@ class _EditMemberDialog extends StatefulWidget {
 class _EditMemberDialogState extends State<_EditMemberDialog> {
   late TextEditingController firstNameController;
   late TextEditingController lastNameController;
-  late TextEditingController emailController;
   String? selectedRole;
   String? selectedAgency;
   String? previousAgencyId;
@@ -54146,7 +54309,6 @@ class _EditMemberDialogState extends State<_EditMemberDialog> {
     super.initState();
     firstNameController = TextEditingController(text: widget.initialFirstName);
     lastNameController = TextEditingController(text: widget.initialLastName);
-    emailController = TextEditingController(text: widget.data.email);
     selectedRole = widget.data.role;
     _loadData();
   }
@@ -54155,7 +54317,6 @@ class _EditMemberDialogState extends State<_EditMemberDialog> {
   void dispose() {
     firstNameController.dispose();
     lastNameController.dispose();
-    emailController.dispose();
     super.dispose();
   }
 
@@ -54284,7 +54445,7 @@ class _EditMemberDialogState extends State<_EditMemberDialog> {
         final updateData = {
           'firstName': firstNameController.text.trim(),
           'lastName': lastNameController.text.trim(),
-          'email': emailController.text.trim(),
+
           'role': selectedRole,
           'agency': selectedAgency != null && selectedAgency!.isNotEmpty
               ? FirebaseFirestore.instance.collection('agencies').doc(selectedAgency)
@@ -54485,22 +54646,6 @@ class _EditMemberDialogState extends State<_EditMemberDialog> {
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Email',
-                      style:
-                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      hintText: 'Email address',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                    ),
                   ),
                   const SizedBox(height: 16),
                   const Text('Role',
