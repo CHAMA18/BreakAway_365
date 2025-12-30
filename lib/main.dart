@@ -19162,14 +19162,31 @@ class _CoachStatCard extends StatelessWidget {
   }
 }
 
-class _CoachUpcomingSessionsCard extends StatelessWidget {
+class _CoachUpcomingSessionsCard extends StatefulWidget {
   const _CoachUpcomingSessionsCard();
 
+  @override
+  State<_CoachUpcomingSessionsCard> createState() => _CoachUpcomingSessionsCardState();
+}
+
+class _CoachUpcomingSessionsCardState extends State<_CoachUpcomingSessionsCard> {
   static const Color _border = Color(0xFFE5E7EB);
   static const Color _muted = Color(0xFF6B7280);
 
+  void _showSessionCreationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const _SessionCreationDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       padding: const EdgeInsets.fromLTRB(28, 28, 28, 32),
       decoration: BoxDecoration(
@@ -19187,55 +19204,643 @@ class _CoachUpcomingSessionsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Upcoming Sessions',
-            style: TextStyle(
-              color: Color(0xFF111827),
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Upcoming Sessions',
+                style: TextStyle(
+                  color: Color(0xFF111827),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE1E9FF),
+                  foregroundColor: const Color(0xFF2563EB),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                onPressed: _showSessionCreationDialog,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text(
+                  'New Session',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _border),
-            ),
-            child: const Center(
-              child: Text(
-                'No upcoming sessions scheduled.',
-                style: TextStyle(color: _muted, fontSize: 14),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE1E9FF),
-                foregroundColor: const Color(0xFF2563EB),
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-              onPressed: () {},
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'Add session',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-              ),
-            ),
+          const SizedBox(height: 16),
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('coachingNotes')
+                .where('coachId', isEqualTo: currentUser.uid)
+                .where('noteType', isEqualTo: 'Session Note')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Error loading sessions',
+                    style: TextStyle(color: Colors.red.shade400, fontSize: 14),
+                  ),
+                );
+              }
+
+              var sessions = snapshot.data?.docs ?? [];
+
+              // Sort by session date
+              sessions.sort((a, b) {
+                final aData = a.data() as Map<String, dynamic>;
+                final bData = b.data() as Map<String, dynamic>;
+                final aDate = aData['sessionDate'] as Timestamp?;
+                final bDate = bData['sessionDate'] as Timestamp?;
+                if (aDate == null && bDate == null) return 0;
+                if (aDate == null) return 1;
+                if (bDate == null) return -1;
+                return aDate.compareTo(bDate); // Ascending order
+              });
+
+              if (sessions.isEmpty) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _border),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'No sessions scheduled.',
+                      style: TextStyle(color: _muted, fontSize: 14),
+                    ),
+                  ),
+                );
+              }
+
+              return ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 300),
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: sessions.map((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      return _SessionCard(
+                        noteId: doc.id,
+                        data: data,
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 }
+
+// Session Card Widget - displays individual session with proper formatting
+class _SessionCard extends StatelessWidget {
+  const _SessionCard({
+    required this.noteId,
+    required this.data,
+  });
+
+  final String noteId;
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    final sessionType = data['tag'] as String? ?? 'Session';
+    final memberName = data['memberName'] as String? ?? 'Unknown';
+    final sessionDate = data['sessionDate'] as Timestamp?;
+    final now = DateTime.now();
+    final isPast = sessionDate != null && sessionDate.toDate().isBefore(now);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (context) => _NoteDetailDialog(noteId: noteId, data: data),
+          );
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isPast ? const Color(0xFFF9FAFB) : const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isPast ? const Color(0xFFE5E7EB) : const Color(0xFFBFDBFE),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isPast
+                      ? const Color(0xFFE5E7EB)
+                      : const Color(0xFF3B82F6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.event_note_outlined,
+                  color: isPast ? const Color(0xFF6B7280) : const Color(0xFF3B82F6),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                        child: memberName != null && memberName != 'Unknown' && memberName.isNotEmpty
+                            ? RichText(
+                                text: TextSpan(
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                  children: [
+                                    TextSpan(
+                                      text: sessionType,
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
+                                    const TextSpan(text: ' with '),
+                                    TextSpan(
+                                      text: memberName,
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : Text(
+                                sessionType,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF1F2937),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                        if (isPast)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6B7280).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Completed',
+                              style: TextStyle(
+                                color: Color(0xFF6B7280),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.calendar_today,
+                            size: 12, color: Color(0xFF9CA3AF)),
+                        const SizedBox(width: 4),
+                        Text(
+                          sessionDate != null
+                              ? _formatSessionDate(sessionDate)
+                              : 'No date set',
+                          style: const TextStyle(
+                            color: Color(0xFF6B7280),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatSessionDate(Timestamp timestamp) {
+    final date = timestamp.toDate();
+    return '${date.month}/${date.day}/${date.year}';
+  }
+}
+
+// Session Creation Dialog - allows creating session notes from dashboard
+class _SessionCreationDialog extends StatefulWidget {
+  const _SessionCreationDialog();
+
+  @override
+  State<_SessionCreationDialog> createState() => _SessionCreationDialogState();
+}
+
+class _SessionCreationDialogState extends State<_SessionCreationDialog> {
+  final _sessionTypeController = TextEditingController();
+  final _sessionFocusController = TextEditingController();
+  String? _selectedMemberId;
+  String? _selectedMemberName;
+  DateTime? _sessionDate;
+  List<Map<String, dynamic>> _members = [];
+  bool _isLoadingMembers = true;
+  bool _isCreating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMembers();
+  }
+
+  @override
+  void dispose() {
+    _sessionTypeController.dispose();
+    _sessionFocusController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMembers() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      setState(() => _isLoadingMembers = false);
+      return;
+    }
+
+    try {
+      final currentUserRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid);
+
+      var coachDocs = await FirebaseFirestore.instance
+          .collection('member_coach')
+          .where('coachref', isEqualTo: currentUserRef)
+          .get();
+
+      if (coachDocs.docs.isEmpty) {
+        coachDocs = await FirebaseFirestore.instance
+            .collection('member_coach')
+            .where('coach', isEqualTo: currentUserRef)
+            .get();
+      }
+
+      final Set<String> memberIds = {};
+
+      for (final coachDoc in coachDocs.docs) {
+        final data = coachDoc.data();
+        final memberRef = data['memberref'] as DocumentReference?
+            ?? data['member'] as DocumentReference?;
+        if (memberRef != null) {
+          memberIds.add(memberRef.id);
+        }
+
+        final membersAssigned = data['membersAssigned'] as List<dynamic>?;
+        if (membersAssigned != null) {
+          for (final memberRefItem in membersAssigned) {
+            if (memberRefItem is DocumentReference) {
+              memberIds.add(memberRefItem.id);
+            }
+          }
+        }
+      }
+
+      final List<Map<String, dynamic>> members = [];
+      for (final memberId in memberIds) {
+        try {
+          final memberDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(memberId)
+              .get();
+          
+          if (memberDoc.exists) {
+            final data = memberDoc.data()!;
+            final firstName = data['firstName'] as String? ?? '';
+            final lastName = data['lastName'] as String? ?? '';
+            final displayName =
+                data['displayName'] as String? ?? '$firstName $lastName'.trim();
+            members.add({
+              'id': memberId,
+              'name': displayName.isNotEmpty ? displayName : 'Member',
+            });
+          }
+        } catch (e) {
+          debugPrint('Error loading member $memberId: $e');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _members = members;
+          _isLoadingMembers = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading members: $e');
+      if (mounted) {
+        setState(() {
+          _members = [];
+          _isLoadingMembers = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _sessionDate ?? now,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (picked != null && mounted) {
+      setState(() => _sessionDate = picked);
+    }
+  }
+
+  Future<void> _createSession() async {
+    if (_sessionFocusController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter session focus')),
+      );
+      return;
+    }
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to create session notes')),
+      );
+      return;
+    }
+
+    setState(() => _isCreating = true);
+
+    try {
+      final sessionType = _sessionTypeController.text.trim().isNotEmpty
+          ? _sessionTypeController.text.trim()
+          : 'Coaching Session';
+      final sessionFocus = _sessionFocusController.text.trim();
+
+      final noteContent = '''Session Type: $sessionType
+Focus Areas: $sessionFocus
+
+Key Discussion Points:
+• Review of progress since last session
+• Current challenges and opportunities
+• Action items and next steps
+
+Next Steps:
+• Follow up on discussed items
+• Schedule next session''';
+
+      await FirebaseFirestore.instance.collection('coachingNotes').add({
+        'title': 'Session Note - $sessionType',
+        'content': noteContent,
+        'coachId': currentUser.uid,
+        'memberId': _selectedMemberId,
+        'memberName': _selectedMemberName ?? 'Unknown',
+        'noteType': 'Session Note',
+        'tag': sessionType,
+        'isDraft': false,
+        'sessionDate':
+            _sessionDate != null ? Timestamp.fromDate(_sessionDate!) : null,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session note created successfully'),
+            backgroundColor: Color(0xFF22C55E),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error creating session note: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create session: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        width: 600,
+        constraints: const BoxConstraints(maxHeight: 650),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                color: Color(0xFF2563EB),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.event_note, color: Colors.white, size: 28),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Create Session',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildLabel('Member'),
+                    const SizedBox(height: 8),
+                    _isLoadingMembers
+                        ? const CircularProgressIndicator(strokeWidth: 2)
+                        : DropdownButtonFormField<String>(
+                            value: _selectedMemberId,
+                            items: _members
+                                .map((m) => DropdownMenuItem(
+                                      value: m['id'] as String,
+                                      child: Text(m['name'] as String),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              final member = _members.firstWhere(
+                                  (m) => m['id'] == value,
+                                  orElse: () => {});
+                              setState(() {
+                                _selectedMemberId = value;
+                                _selectedMemberName = member['name'] as String?;
+                              });
+                            },
+                            decoration: _inputDecoration('Select member'),
+                          ),
+                    const SizedBox(height: 20),
+                    _buildLabel('Session Type'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _sessionTypeController,
+                      decoration: _inputDecoration('e.g., Check-in, Strategy, Review'),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildLabel('Session Focus'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _sessionFocusController,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: _inputDecoration(
+                          'Key areas to focus on during this session'),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildLabel('Session Date'),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: _selectDate,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_today,
+                                color: Color(0xFF6B7280), size: 18),
+                            const SizedBox(width: 12),
+                            Text(
+                              _sessionDate != null
+                                  ? '${_sessionDate!.month}/${_sessionDate!.day}/${_sessionDate!.year}'
+                                  : 'Select date',
+                              style: TextStyle(
+                                color: _sessionDate != null
+                                    ? const Color(0xFF374151)
+                                    : const Color(0xFF9CA3AF),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        onPressed: _isCreating ? null : _createSession,
+                        child: _isCreating
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2))
+                            : const Text(
+                                'Create Session',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.w600),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: Color(0xFF374151),
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 2),
+      ),
+    );
+  }
+}
+
 
 class _CoachMemberProgressCard extends StatefulWidget {
   const _CoachMemberProgressCard();
@@ -19260,78 +19865,118 @@ class _CoachMemberProgressCardState extends State<_CoachMemberProgressCard> {
     if (currentUser == null) return;
 
     final firestore = FirebaseFirestore.instance;
+    final currentUserRef = firestore.collection('users').doc(currentUser.uid);
 
-    // Get members assigned to this coach
-    final membersSnapshot = await firestore
-        .collection('users')
-        .where('coach',
-            isEqualTo: firestore.collection('users').doc(currentUser.uid))
-        .get();
-
-    final List<_MemberProgressData> progressList = [];
-
-    for (final memberDoc in membersSnapshot.docs) {
-      final memberData = memberDoc.data();
-      final String firstName = memberData['firstName'] as String? ?? '';
-      final String lastName = memberData['lastName'] as String? ?? '';
-      final String displayName = memberData['displayName'] as String? ?? '';
-      final String memberName =
-          displayName.isNotEmpty ? displayName : '$firstName $lastName'.trim();
-
-      // Get THINK module completions
-      final thinkCompletions = await firestore
-          .collection('users')
-          .doc(memberDoc.id)
-          .collection('completions')
-          .where('courseId', isEqualTo: 'think')
+    try {
+      // Query member_coach collection
+      var coachDocs = await firestore
+          .collection('member_coach')
+          .where('coachref', isEqualTo: currentUserRef)
           .get();
 
-      // Get KEEP module completions
-      final keepCompletions = await firestore
-          .collection('users')
-          .doc(memberDoc.id)
-          .collection('completions')
-          .where('courseId', isEqualTo: 'keep')
-          .get();
+      // Also check for 'coach' field as fallback
+      if (coachDocs.docs.isEmpty) {
+        coachDocs = await firestore
+            .collection('member_coach')
+            .where('coach', isEqualTo: currentUserRef)
+            .get();
+      }
 
-      // Assuming 5 videos per module, calculate percentage
-      final double thinkProgress = (thinkCompletions.docs.length / 5) * 100;
-      final double keepProgress = (keepCompletions.docs.length / 5) * 100;
-      final double overallProgress = (thinkProgress + keepProgress) / 2;
+      final Set<String> memberIds = {};
 
-      // Get next session date for this member
-      final sessionsSnapshot = await firestore
-          .collection('sessions')
-          .where('coachId', isEqualTo: currentUser.uid)
-          .where('memberId', isEqualTo: memberDoc.id)
-          .where('date', isGreaterThanOrEqualTo: Timestamp.now())
-          .orderBy('date')
-          .limit(1)
-          .get();
+      for (final coachDoc in coachDocs.docs) {
+        final data = coachDoc.data();
+        
+        // Get single member reference (legacy)
+        final memberRef = data['memberref'] as DocumentReference?
+            ?? data['member'] as DocumentReference?;
+        if (memberRef != null) {
+          memberIds.add(memberRef.id);
+        }
 
-      String nextSessionDate = 'Not scheduled';
-      if (sessionsSnapshot.docs.isNotEmpty) {
-        final sessionData = sessionsSnapshot.docs.first.data();
-        final Timestamp? sessionTimestamp = sessionData['date'] as Timestamp?;
-        if (sessionTimestamp != null) {
-          final DateTime sessionDate = sessionTimestamp.toDate();
-          nextSessionDate =
-              '${sessionDate.month}/${sessionDate.day}/${sessionDate.year}';
+        // Get multiple members from array
+        final membersAssigned = data['membersAssigned'] as List<dynamic>?;
+        if (membersAssigned != null) {
+          for (final memberRefItem in membersAssigned) {
+            if (memberRefItem is DocumentReference) {
+              memberIds.add(memberRefItem.id);
+            }
+          }
         }
       }
 
-      progressList.add(_MemberProgressData(
-        name: memberName.isEmpty ? 'Unnamed Member' : memberName,
-        progress: overallProgress.clamp(0, 100),
-        nextSession: nextSessionDate,
-      ));
-    }
+      final List<_MemberProgressData> progressList = [];
 
-    if (mounted) {
-      setState(() {
-        _memberProgress = progressList;
-        _loading = false;
-      });
+      for (final memberId in memberIds) {
+        try {
+          // Get member details
+          final memberDoc = await firestore.collection('users').doc(memberId).get();
+          
+          if (!memberDoc.exists) continue;
+
+          final memberData = memberDoc.data()!;
+          final String firstName = memberData['firstName'] as String? ?? '';
+          final String lastName = memberData['lastName'] as String? ?? '';
+          final String displayName = memberData['displayName'] as String? ?? '';
+          final String memberName =
+              displayName.isNotEmpty ? displayName : '$firstName $lastName'.trim();
+
+          // Get next session date from coachingNotes
+          final sessionsSnapshot = await firestore
+              .collection('coachingNotes')
+              .where('coachId', isEqualTo: currentUser.uid)
+              .where('memberId', isEqualTo: memberId)
+              .where('noteType', isEqualTo: 'Session Note')
+              .get();
+
+          String nextSessionDate = 'None';
+          DateTime? closestDate;
+
+          for (final sessionDoc in sessionsSnapshot.docs) {
+            final sessionData = sessionDoc.data();
+            final Timestamp? sessionTimestamp = sessionData['sessionDate'] as Timestamp?;
+            if (sessionTimestamp != null) {
+              final DateTime sessionDate = sessionTimestamp.toDate();
+              final now = DateTime.now();
+              
+              // Only consider future sessions
+              if (sessionDate.isAfter(now)) {
+                if (closestDate == null || sessionDate.isBefore(closestDate)) {
+                  closestDate = sessionDate;
+                }
+              }
+            }
+          }
+
+          if (closestDate != null) {
+            nextSessionDate =
+                '${closestDate.month}/${closestDate.day}/${closestDate.year}';
+          }
+
+          progressList.add(_MemberProgressData(
+            name: memberName.isEmpty ? 'Unnamed Member' : memberName,
+            progress: 0.0, // Not used anymore
+            nextSession: nextSessionDate,
+          ));
+        } catch (e) {
+          debugPrint('Error loading member $memberId: $e');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _memberProgress = progressList;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading member progress: $e');
+      if (mounted) {
+        setState(() {
+          _memberProgress = [];
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -19369,7 +20014,7 @@ class _CoachMemberProgressCardState extends State<_CoachMemberProgressCard> {
               color: const Color(0xFFF3F4F6),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Row(
+            child: Row(
               children: [
                 Expanded(
                   flex: 2,
@@ -19385,18 +20030,7 @@ class _CoachMemberProgressCardState extends State<_CoachMemberProgressCard> {
                 ),
                 Expanded(
                   child: Text(
-                    'PROGRESS',
-                    style: TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    'NEXT SESSION ACTIONS',
+                    'NEXT SESSION',
                     style: TextStyle(
                       color: Color(0xFF6B7280),
                       fontSize: 13,
@@ -19464,52 +20098,60 @@ class _MemberProgressRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFA),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              data.name,
-              style: const TextStyle(
-                color: Color(0xFF111827),
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.person_outline,
+                      color: Color(0xFF3B82F6),
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      data.name,
+                      style: const TextStyle(
+                        color: Color(0xFF1F2937),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              '${data.progress.toStringAsFixed(0)}%',
-              style: TextStyle(
-                color: data.progress >= 70
-                    ? const Color(0xFF059669)
-                    : data.progress >= 40
-                        ? const Color(0xFFF59E0B)
-                        : const Color(0xFFEF4444),
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
+            Expanded(
+              child: Text(
+                data.nextSession,
+                style: const TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 13,
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              data.nextSession,
-              style: const TextStyle(
-                color: Color(0xFF6B7280),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -51727,8 +52369,7 @@ class _AchievementsCardState extends State<_AchievementsCard> {
                 return bTime.compareTo(aTime);
               });
 
-              // Limit to 5
-              if (notes.length > 5) notes = notes.take(5).toList();
+              // Don't limit - allow scrolling instead
 
               if (notes.isEmpty) {
                 return const Padding(
@@ -51740,7 +52381,11 @@ class _AchievementsCardState extends State<_AchievementsCard> {
                 );
               }
 
-              return Column(
+              // Make scrollable with max height
+              return ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 300),
+                child: SingleChildScrollView(
+                  child: Column(
                 children: notes.asMap().entries.map((entry) {
                   final index = entry.key;
                   final doc = entry.value;
@@ -51749,75 +52394,297 @@ class _AchievementsCardState extends State<_AchievementsCard> {
                   final content = data['content'] as String? ?? '';
                   final noteType = data['noteType'] as String? ??
                       data['tag'] as String? ??
-                      'General';
-                  final isPrimary = index == 0;
-
+                      'Note';
+                  
+                  // Determine note type color and icon
+                  Color noteColor;
+                  IconData noteIcon;
+                  if (noteType == 'Goal') {
+                    noteColor = const Color(0xFF10B981); // Green
+                    noteIcon = Icons.flag_outlined;
+                  } else if (noteType == 'Session Note') {
+                    noteColor = const Color(0xFF3B82F6); // Blue
+                    noteIcon = Icons.event_note_outlined;
+                  } else {
+                    noteColor = const Color(0xFF6B7280); // Gray
+                    noteIcon = Icons.sticky_note_2_outlined;
+                  }
                   return Padding(
                     padding: EdgeInsets.only(
                         bottom: index == notes.length - 1 ? 0 : 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          noteType == 'Goal'
-                              ? Icons.flag_outlined
-                              : Icons.sticky_note_2_outlined,
-                          size: 20,
-                          color: isPrimary
-                              ? const Color(0xFF1F2937)
-                              : const Color(0xFFC4C7D1),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                style: TextStyle(
-                                  color: isPrimary
-                                      ? const Color(0xFF1F2937)
-                                      : const Color(0xFFC4C7D1),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (content.isNotEmpty) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  content.length > 60
-                                      ? '${content.substring(0, 60)}...'
-                                      : content,
-                                  style: TextStyle(
-                                    color: isPrimary
-                                        ? const Color(0xFF6B7280)
-                                        : const Color(0xFFD1D5DB),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 2),
-                              Text(
-                                noteType,
-                                style: TextStyle(
-                                  color: isPrimary
-                                      ? const Color(0xFF9CA3AF)
-                                      : const Color(0xFFE5E7EB),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
+                    child: InkWell(
+                      onTap: () {
+                        // Show note details dialog
+                        showDialog(
+                          context: context,
+                          builder: (context) => _MemberNoteDetailDialog(
+                            noteId: doc.id,
+                            data: data,
                           ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
                         ),
-                      ],
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: noteColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                noteIcon,
+                                size: 20,
+                                color: noteColor,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          title,
+                                          style: const TextStyle(
+                                            color: Color(0xFF1F2937),
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: noteColor.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          noteType,
+                                          style: TextStyle(
+                                            color: noteColor,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (content.isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      content.length > 80
+                                          ? '${content.substring(0, 80)}...'
+                                          : content,
+                                      style: const TextStyle(
+                                        color: Color(0xFF6B7280),
+                                        fontSize: 12,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   );
                 }).toList(),
+                  ),
+                ),
               );
             },
           ),
         ],
       ),
     );
+  }
+}
+
+
+// Member Note Detail Dialog - shows full note content when tapped
+class _MemberNoteDetailDialog extends StatelessWidget {
+  const _MemberNoteDetailDialog({
+    required this.noteId,
+    required this.data,
+  });
+
+  final String noteId;
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = data['title'] as String? ?? 'Untitled';
+    final content = data['content'] as String? ?? '';
+    final noteType = data['noteType'] as String? ?? data['tag'] as String? ?? 'Note';
+    
+    // Determine note type color
+    Color noteColor;
+    IconData noteIcon;
+    if (noteType == 'Goal') {
+      noteColor = const Color(0xFF10B981); // Green
+      noteIcon = Icons.flag_outlined;
+    } else if (noteType == 'Session Note') {
+      noteColor = const Color(0xFF3B82F6); // Blue
+      noteIcon =Icons.event_note_outlined;
+    } else {
+      noteColor = const Color(0xFF6B7280); // Gray
+      noteIcon = Icons.sticky_note_2_outlined;
+    }
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        width: 600,
+        constraints: const BoxConstraints(maxHeight: 600),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: noteColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Row(
+                children: [
+                  Icon(noteIcon, color: Colors.white, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            noteType,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (noteType == 'Goal') ...[
+                      // Show goal-specific fields if available
+                      if (data['startDate'] != null || data['endDate'] != null) ...[
+                        Row(
+                          children: [
+                            if (data['startDate'] != null) ...[
+                              const Icon(Icons.calendar_today, size: 16, color: Color(0xFF6B7280)),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Start: ${_formatDate(data['startDate'])}',
+                                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 14),
+                              ),
+                              const SizedBox(width: 16),
+                            ],
+                            if (data['endDate'] != null) ...[
+                              const Icon(Icons.event, size: 16, color: Color(0xFF6B7280)),
+                              const SizedBox(width: 6),
+                              Text(
+                                'End: ${_formatDate(data['endDate'])}',
+                                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 14),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ],
+                    if (noteType == 'Session Note') ...[
+                      // Show session-specific fields
+                      if (data['sessionDate'] != null) ...[
+                        Row(
+                          children: [
+                            const Icon(Icons.event, size: 16, color: Color(0xFF6B7280)),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Session Date: ${_formatDate(data['sessionDate'])}',
+                              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 14),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ],
+                    const Text(
+                      'Note Content',
+                      style: TextStyle(
+                        color: Color(0xFF374151),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      content.isNotEmpty ? content : 'No content',
+                      style: const TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 14,
+                        height: 1.6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(dynamic date) {
+    if (date == null) return '';
+    if (date is Timestamp) {
+      final dt = date.toDate();
+      return '${dt.month}/${dt.day}/${dt.year}';
+    }
+    return '';
   }
 }
 
