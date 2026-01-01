@@ -27647,6 +27647,17 @@ class DiscussionForumPage extends StatefulWidget {
 
 class _DiscussionForumPageState extends State<DiscussionForumPage> {
   ForumTab _activeTab = ForumTab.forums;
+  final TextEditingController _friendSearchController = TextEditingController();
+  String _friendSearchQuery = '';
+  final TextEditingController _forumSearchController = TextEditingController();
+  String _forumSearchQuery = '';
+
+  @override
+  void dispose() {
+    _friendSearchController.dispose();
+    _forumSearchController.dispose();
+    super.dispose();
+  }
 
   void _handleTabSelection(ForumTab tab) {
     if (_activeTab == tab) return;
@@ -27760,10 +27771,23 @@ class _DiscussionForumPageState extends State<DiscussionForumPage> {
     final Widget searchInput = SizedBox(
       height: 54,
       child: TextField(
+        controller: _forumSearchController,
+        onChanged: (value) =>
+            setState(() => _forumSearchQuery = value.trim().toLowerCase()),
         decoration: InputDecoration(
           hintText: 'Search forums..',
           prefixIcon:
               const Icon(Icons.search, color: DiscussionForumPage._mutedColor),
+          suffixIcon: _forumSearchQuery.isNotEmpty
+              ? IconButton(
+                  onPressed: () {
+                    _forumSearchController.clear();
+                    setState(() => _forumSearchQuery = '');
+                  },
+                  icon: const Icon(Icons.close_rounded,
+                      color: DiscussionForumPage._mutedColor),
+                )
+              : null,
           filled: true,
           fillColor: Colors.white,
           contentPadding:
@@ -27824,11 +27848,11 @@ class _DiscussionForumPageState extends State<DiscussionForumPage> {
         const SizedBox(height: 32),
         const _ForumSectionHeading(label: 'Featured Forums'),
         const SizedBox(height: 20),
-        const _FeaturedForumsSection(),
+        _FeaturedForumsSection(searchQuery: _forumSearchQuery),
         const SizedBox(height: 36),
         const _ForumSectionHeading(label: 'My Forums'),
         const SizedBox(height: 20),
-        const _MyForumsSection(),
+        _MyForumsSection(searchQuery: _forumSearchQuery),
       ],
     );
   }
@@ -27837,10 +27861,23 @@ class _DiscussionForumPageState extends State<DiscussionForumPage> {
     final Widget searchInput = SizedBox(
       height: 54,
       child: TextField(
+        controller: _friendSearchController,
+        onChanged: (value) =>
+            setState(() => _friendSearchQuery = value.trim().toLowerCase()),
         decoration: InputDecoration(
           hintText: 'Search for friends by name or username..',
           prefixIcon:
               const Icon(Icons.search, color: DiscussionForumPage._mutedColor),
+          suffixIcon: _friendSearchQuery.isNotEmpty
+              ? IconButton(
+                  onPressed: () {
+                    _friendSearchController.clear();
+                    setState(() => _friendSearchQuery = '');
+                  },
+                  icon: const Icon(Icons.close_rounded,
+                      color: DiscussionForumPage._mutedColor),
+                )
+              : null,
           filled: true,
           fillColor: Colors.white,
           contentPadding:
@@ -27907,7 +27944,7 @@ class _DiscussionForumPageState extends State<DiscussionForumPage> {
           ),
         ),
         const SizedBox(height: 24),
-        _AllUsersList(),
+        _AllUsersList(searchQuery: _friendSearchQuery),
         const SizedBox(height: 36),
         const _MyFriendsSection(),
       ],
@@ -28442,9 +28479,22 @@ class _MyCoachRequestsList extends StatelessWidget {
       stream: FirebaseFirestore.instance
           .collection('coachRequests')
           .where('fromUserId', isEqualTo: currentUser.uid)
-          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: DiscussionForumPage._borderColor),
+            ),
+            child: Text(
+              'Error loading requests: ${snapshot.error}',
+              style: const TextStyle(color: DiscussionForumPage._mutedColor),
+            ),
+          );
+        }
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
             padding: EdgeInsets.all(24),
@@ -28659,29 +28709,16 @@ class _ForumTabButton extends StatelessWidget {
 }
 
 class _FeaturedForumsSection extends StatelessWidget {
-  const _FeaturedForumsSection();
+  const _FeaturedForumsSection({this.searchQuery = ''});
+
+  final String searchQuery;
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream:
-          FirebaseFirestore.instance.collection('forums').limit(3).snapshots(),
+          FirebaseFirestore.instance.collection('forums').limit(10).snapshots(),
       builder: (context, snapshot) {
-        print(
-            '📋 Featured Forums - connectionState: ${snapshot.connectionState}');
-        print('📋 Featured Forums - hasError: ${snapshot.hasError}');
-        if (snapshot.hasError) {
-          print('❌ Featured Forums error: ${snapshot.error}');
-        }
-        print('📋 Featured Forums - hasData: ${snapshot.hasData}');
-        print(
-            '📋 Featured Forums - docs count: ${snapshot.data?.docs.length ?? 0}');
-        // Log each forum's data for debugging
-        snapshot.data?.docs.forEach((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          print(
-              '🔍 Forum: ${data['title']} by ${data['creatorName']} at ${data['createdAt']}');
-        });
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Column(
             children: List.generate(
@@ -28703,7 +28740,18 @@ class _FeaturedForumsSection extends StatelessWidget {
           return Text('Error: ${snapshot.error}');
         }
 
-        final forums = snapshot.data?.docs ?? [];
+        final allForums = snapshot.data?.docs ?? [];
+        final forums = allForums.where((doc) {
+          if (searchQuery.isEmpty) return true;
+          final data = doc.data() as Map<String, dynamic>;
+          final title = (data['title'] as String? ?? '').toLowerCase();
+          final description = (data['description'] as String? ?? '').toLowerCase();
+          final creatorName = (data['creatorName'] as String? ?? '').toLowerCase();
+          return title.contains(searchQuery) ||
+              description.contains(searchQuery) ||
+              creatorName.contains(searchQuery);
+        }).take(3).toList();
+
         if (forums.isEmpty) {
           return Container(
             width: double.infinity,
@@ -28713,9 +28761,11 @@ class _FeaturedForumsSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: DiscussionForumPage._borderColor),
             ),
-            child: const Text(
-              'No forums available yet.',
-              style: TextStyle(
+            child: Text(
+              searchQuery.isEmpty
+                  ? 'No forums available yet.'
+                  : 'No forums match your search.',
+              style: const TextStyle(
                   color: DiscussionForumPage._mutedColor, fontSize: 14),
             ),
           );
@@ -29943,7 +29993,9 @@ class _CommentTile extends StatelessWidget {
 }
 
 class _MyForumsSection extends StatelessWidget {
-  const _MyForumsSection();
+  const _MyForumsSection({this.searchQuery = ''});
+
+  final String searchQuery;
 
   @override
   Widget build(BuildContext context) {
@@ -30015,7 +30067,15 @@ class _MyForumsSection extends StatelessWidget {
           );
         }
 
-        final forums = snapshot.data?.docs ?? [];
+        final allForums = snapshot.data?.docs ?? [];
+        final forums = allForums.where((doc) {
+          if (searchQuery.isEmpty) return true;
+          final data = doc.data() as Map<String, dynamic>;
+          final title = (data['title'] as String? ?? '').toLowerCase();
+          final description = (data['description'] as String? ?? '').toLowerCase();
+          return title.contains(searchQuery) || description.contains(searchQuery);
+        }).toList();
+
         if (forums.isEmpty) {
           return Container(
             width: double.infinity,
@@ -30025,9 +30085,11 @@ class _MyForumsSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: DiscussionForumPage._borderColor),
             ),
-            child: const Text(
-              'You have not created any forums yet.',
-              style: TextStyle(
+            child: Text(
+              searchQuery.isEmpty
+                  ? 'You have not created any forums yet.'
+                  : 'No forums match your search.',
+              style: const TextStyle(
                   color: DiscussionForumPage._mutedColor, fontSize: 14),
             ),
           );
@@ -30183,6 +30245,79 @@ class _FriendSuggestionCard extends StatefulWidget {
 class _FriendSuggestionCardState extends State<_FriendSuggestionCard> {
   bool _isSending = false;
   bool _requestSent = false;
+  bool _isFriend = false;
+  bool _hasPendingRequest = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkRelationshipStatus();
+  }
+
+  Future<void> _checkRelationshipStatus() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || widget.data.userId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      // Check if already friends
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      final friends = List<String>.from(userDoc.data()?['friends'] ?? []);
+      if (friends.contains(widget.data.userId)) {
+        if (mounted) {
+          setState(() {
+            _isFriend = true;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      // Check if request already sent
+      final sentRequest = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('sent_requests')
+          .doc(widget.data.userId)
+          .get();
+      if (sentRequest.exists) {
+        if (mounted) {
+          setState(() {
+            _requestSent = true;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      // Check if we have a pending request from them
+      final pendingRequest = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('friend_requests')
+          .doc(widget.data.userId)
+          .get();
+      if (pendingRequest.exists) {
+        if (mounted) {
+          setState(() {
+            _hasPendingRequest = true;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      if (mounted) setState(() => _isLoading = false);
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   Future<void> _sendFriendRequest() async {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -30255,6 +30390,74 @@ class _FriendSuggestionCardState extends State<_FriendSuggestionCard> {
     }
   }
 
+  Future<void> _openChat() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || widget.data.userId == null) return;
+
+    try {
+      // Check for existing conversation
+      final conversationsQuery = await FirebaseFirestore.instance
+          .collection('conversations')
+          .where('participants', arrayContains: currentUser.uid)
+          .get();
+
+      String? existingConversationId;
+      for (final doc in conversationsQuery.docs) {
+        final participants = List<String>.from(doc.data()['participants'] ?? []);
+        if (participants.contains(widget.data.userId) && participants.length == 2) {
+          existingConversationId = doc.id;
+          break;
+        }
+      }
+
+      String conversationId;
+      if (existingConversationId != null) {
+        conversationId = existingConversationId;
+      } else {
+        // Create new conversation
+        final newConversation = await FirebaseFirestore.instance.collection('conversations').add({
+          'participants': [currentUser.uid, widget.data.userId],
+          'createdAt': FieldValue.serverTimestamp(),
+          'lastMessage': null,
+          'lastMessageAt': FieldValue.serverTimestamp(),
+        });
+        conversationId = newConversation.id;
+      }
+
+      if (mounted) {
+        // Navigate to MessagesPage - the chat will be available there
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Chat created with ${widget.data.name}. Go to Messages to view.'),
+            backgroundColor: const Color(0xFF22C55E),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            action: SnackBarAction(
+              label: 'Open Messages',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const MessagesPage()),
+                );
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open chat: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final Widget avatar =
@@ -30272,6 +30475,94 @@ class _FriendSuggestionCardState extends State<_FriendSuggestionCard> {
                   size: 30,
                 ),
               );
+
+    Widget actionButton;
+    if (_isLoading) {
+      actionButton = const SizedBox(
+        width: 100,
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    } else if (_isFriend) {
+      // Show a simple "Friend" indicator instead of a button
+      actionButton = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF22C55E).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, size: 16, color: Color(0xFF22C55E)),
+            SizedBox(width: 6),
+            Text('Friend', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF22C55E))),
+          ],
+        ),
+      );
+    } else if (_hasPendingRequest) {
+      actionButton = ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFF59E0B),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 0,
+        ),
+        onPressed: null,
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.pending, size: 18),
+            SizedBox(width: 8),
+            Text('Pending', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+          ],
+        ),
+      );
+    } else if (_isSending) {
+      actionButton = const SizedBox(
+        width: 140,
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: DiscussionForumPage._primaryBlue,
+            ),
+          ),
+        ),
+      );
+    } else {
+      actionButton = ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _requestSent
+              ? Colors.grey.shade400
+              : DiscussionForumPage._primaryBlue,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 0,
+        ),
+        onPressed: _requestSent ? null : _sendFriendRequest,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_requestSent ? Icons.check_circle : Icons.person_add, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              _requestSent ? 'Request Sent' : 'Send Request',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -30331,52 +30622,7 @@ class _FriendSuggestionCardState extends State<_FriendSuggestionCard> {
             ),
           ),
           const SizedBox(width: 20),
-          SizedBox(
-            height: 44,
-            child: _isSending
-                ? const SizedBox(
-                    width: 140,
-                    child: Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: DiscussionForumPage._primaryBlue,
-                        ),
-                      ),
-                    ),
-                  )
-                : ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _requestSent
-                          ? Colors.grey.shade400
-                          : DiscussionForumPage._primaryBlue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 22),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                      elevation: 0,
-                    ),
-                    onPressed: _requestSent ? null : _sendFriendRequest,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                            _requestSent
-                                ? Icons.check_circle
-                                : Icons.person_add,
-                            size: 18),
-                        const SizedBox(width: 8),
-                        Text(
-                          _requestSent ? 'Request Sent' : 'Send Request',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  ),
-          ),
+          SizedBox(height: 44, child: actionButton),
         ],
       ),
     );
@@ -30400,7 +30646,9 @@ class _FriendSuggestionData {
 }
 
 class _AllUsersList extends StatelessWidget {
-  const _AllUsersList();
+  const _AllUsersList({this.searchQuery = ''});
+
+  final String searchQuery;
 
   @override
   Widget build(BuildContext context) {
@@ -30486,6 +30734,10 @@ class _AllUsersList extends StatelessWidget {
             avatarUrl: data['photoUrl'] as String?,
             userId: doc.id,
           );
+        }).where((user) {
+          if (searchQuery.isEmpty) return true;
+          return user.name.toLowerCase().contains(searchQuery) ||
+              user.email.toLowerCase().contains(searchQuery);
         }).toList();
 
         if (allUsers.isEmpty) {
@@ -30793,7 +31045,6 @@ class _FriendRequestsSheetState extends State<_FriendRequestsSheet> {
                               .collection('users')
                               .doc(widget.currentUserId)
                               .collection('friend_requests')
-                              .where('status', isEqualTo: 'pending')
                               .snapshots();
                         } catch (_) {
                           return const Stream<
@@ -31936,133 +32187,171 @@ class _CreateGroupDialogState extends State<_CreateGroupDialog> {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream:
-                    FirebaseFirestore.instance.collection('users').snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser?.uid)
+                    .snapshots(),
+                builder: (context, userSnapshot) {
+                  if (userSnapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
+                  if (userSnapshot.hasError) {
+                    return Center(child: Text('Error: ${userSnapshot.error}'));
                   }
 
-                  final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-                  final users = (snapshot.data?.docs ?? [])
-                      .where((doc) => doc.id != currentUserId)
-                      .map((doc) {
-                    final data = doc.data();
-                    return {
-                      'id': doc.id,
-                      'name': data['username'] ??
-                          data['first_name'] ??
-                          data['email'] ??
-                          'Unknown',
-                      'email': data['email'] ?? '',
-                    };
-                  }).toList();
+                  final friendIds = List<String>.from(
+                      userSnapshot.data?.data() is Map
+                          ? (userSnapshot.data!.data() as Map)['friends'] ?? []
+                          : []);
 
-                  if (users.isEmpty) {
+                  if (friendIds.isEmpty) {
                     return const Center(
-                      child: Text(
-                        'No users available',
-                        style: TextStyle(color: MessagesPage._mutedColor),
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'You have no friends yet. Add friends first to create a group chat.',
+                          style: TextStyle(color: MessagesPage._mutedColor),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     );
                   }
 
-                  return ListView.separated(
-                    itemCount: users.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final user = users[index];
-                      final userId = user['id'] as String;
-                      final isSelected = _selectedUserIds.contains(userId);
+                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .where(FieldPath.documentId, whereIn: friendIds.take(10).toList())
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () {
-                          setState(() {
-                            if (isSelected) {
-                              _selectedUserIds.remove(userId);
-                            } else {
-                              _selectedUserIds.add(userId);
-                            }
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? MessagesPage._focusColor.withOpacity(0.08)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isSelected
-                                  ? MessagesPage._focusColor
-                                  : MessagesPage._borderColor,
-                              width: isSelected ? 2 : 1,
-                            ),
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Error: ${snapshot.error}'));
+                      }
+
+                      final users = (snapshot.data?.docs ?? []).map((doc) {
+                        final data = doc.data();
+                        final firstName = data['firstName'] as String? ?? '';
+                        final lastName = data['lastName'] as String? ?? '';
+                        final displayName = data['displayName'] as String? ?? '';
+                        final email = data['email'] as String? ?? '';
+                        final name = firstName.isNotEmpty || lastName.isNotEmpty
+                            ? '$firstName $lastName'.trim()
+                            : displayName.isNotEmpty
+                                ? displayName
+                                : email.split('@').first;
+                        return {
+                          'id': doc.id,
+                          'name': name,
+                          'email': email,
+                        };
+                      }).toList();
+
+                      if (users.isEmpty) {
+                        return const Center(
+                          child: Text(
+                            'No friends available',
+                            style: TextStyle(color: MessagesPage._mutedColor),
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: MessagesPage._chipInactive,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  (user['name'] as String).isEmpty
-                                      ? '?'
-                                      : (user['name'] as String)
-                                          .substring(0, 1)
-                                          .toUpperCase(),
-                                  style: const TextStyle(
-                                    color: MessagesPage._titleColor,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                        );
+                      }
+
+                      return ListView.separated(
+                        itemCount: users.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final user = users[index];
+                          final userId = user['id'] as String;
+                          final isSelected = _selectedUserIds.contains(userId);
+
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedUserIds.remove(userId);
+                                } else {
+                                  _selectedUserIds.add(userId);
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? MessagesPage._focusColor.withOpacity(0.08)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? MessagesPage._focusColor
+                                      : MessagesPage._borderColor,
+                                  width: isSelected ? 2 : 1,
                                 ),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      user['name'] as String,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: MessagesPage._chipInactive,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      (user['name'] as String).isEmpty
+                                          ? '?'
+                                          : (user['name'] as String)
+                                              .substring(0, 1)
+                                              .toUpperCase(),
                                       style: const TextStyle(
                                         color: MessagesPage._titleColor,
                                         fontWeight: FontWeight.w700,
-                                        fontSize: 14,
                                       ),
                                     ),
-                                    if ((user['email'] as String)
-                                        .isNotEmpty) ...[
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        user['email'] as String,
-                                        style: const TextStyle(
-                                          color: MessagesPage._mutedColor,
-                                          fontSize: 12,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          user['name'] as String,
+                                          style: const TextStyle(
+                                            color: MessagesPage._titleColor,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
+                                        if ((user['email'] as String).isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            user['email'] as String,
+                                            style: const TextStyle(
+                                              color: MessagesPage._mutedColor,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    const Icon(
+                                      Icons.check_circle,
+                                      color: MessagesPage._focusColor,
+                                      size: 24,
+                                    ),
+                                ],
                               ),
-                              if (isSelected)
-                                const Icon(
-                                  Icons.check_circle,
-                                  color: MessagesPage._focusColor,
-                                  size: 24,
-                                ),
-                            ],
-                          ),
-                        ),
+                            ),
+                          );
+                        },
                       );
                     },
                   );
