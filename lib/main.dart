@@ -6705,9 +6705,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   child: Text('Error loading agencies: ${snapshot.error}'));
             }
 
-            if (snapshot.connectionState == ConnectionState.waiting ||
-                userSnapshot.connectionState == ConnectionState.waiting) {
-              debugPrint('⏳ Waiting for data...');
+            // Only show loading spinner if we don't have any data yet
+            // Once we have data, keep showing it even during state changes (prevents flash on search)
+            if (!snapshot.hasData && !userSnapshot.hasData) {
+              debugPrint('⏳ Waiting for initial data...');
               return const Center(child: CircularProgressIndicator());
             }
 
@@ -6882,6 +6883,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             TextField(
+                              key: const ValueKey('agency_search_field'),
                               controller: _agencySearchController,
                               onChanged: (value) {
                                 debugPrint('🔍 Search input changed: "$value"');
@@ -14709,10 +14711,15 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
         }
 
         // Create document in 'documents' collection
+        // Using field names expected by retrieval code + original names for backwards compatibility
         final documentData = {
-          'document_name': _documentNameController.text.trim(),
-          'content_description': _contentDescriptionController.text.trim(),
-          'supporting_file_url': supportingFileUrl,
+          'doc_name': _documentNameController.text.trim(),
+          'title': _documentNameController.text.trim(),
+          'document_name': _documentNameController.text.trim(),  // backwards compat
+          'description': _contentDescriptionController.text.trim(),
+          'content_description': _contentDescriptionController.text.trim(),  // backwards compat
+          'docUrl': supportingFileUrl,
+          'supporting_file_url': supportingFileUrl,  // backwards compat
           'supporting_file_name': _selectedSupportingFile!.name,
           'file_size': _selectedSupportingFile!.size,
           'uploaded_by': user.uid,
@@ -14721,7 +14728,7 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
         };
 
         final documentDoc = await FirebaseFirestore.instance
-            .collection('documents')
+            .collection('document')
             .add(documentData);
         documentDocId = documentDoc.id;
       }
@@ -14793,22 +14800,21 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
         'updated_at': FieldValue.serverTimestamp(),
       };
 
-      // Add video reference if video was uploaded
-      courseData['video_ref'] =
-          FirebaseFirestore.instance.collection('video').doc(videoDocId);
-      courseData['video_id'] = videoDocId;
-      courseData['has_video'] = true;
+      // Add video reference as array (matching expected format for retrieval)
+      courseData['videos'] = [
+        FirebaseFirestore.instance.collection('video').doc(videoDocId)
+      ];
+      courseData['video_count'] = 1;
       if (_durationController.text.trim().isNotEmpty) {
         courseData['duration'] = _durationController.text.trim();
       }
 
-      // Add document reference if document was uploaded
+      // Add document reference as array (matching expected format for retrieval)
       if (documentDocId != null) {
-        courseData['document_ref'] = FirebaseFirestore.instance
-            .collection('documents')
-            .doc(documentDocId);
-        courseData['document_id'] = documentDocId;
-        courseData['has_document'] = true;
+        courseData['docs'] = [
+          FirebaseFirestore.instance.collection('documents').doc(documentDocId)
+        ];
+        courseData['doc_count'] = 1;
       }
 
       await FirebaseFirestore.instance.collection('courses').add(courseData);
@@ -15535,19 +15541,8 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
                       _inputDecoration('Document title learners will see'),
                 ),
               ),
-              const SizedBox(height: 16),
-              _buildLabeledField(
-                label: 'Description',
-                child: TextField(
-                  controller: _contentDescriptionController,
-                  minLines: 3,
-                  maxLines: 5,
-                  decoration: _inputDecoration(
-                      'Briefly describe what learners should expect',
-                      minLines: 3),
-                ),
-              ),
-              const SizedBox(height: 16),
+            
+             const SizedBox(height: 16),
               _buildLabeledField(
                 label: 'Duration',
                 child: TextField(
@@ -15799,6 +15794,7 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
   late final TextEditingController _courseNameController;
   late final TextEditingController _descriptionController;
   String? _selectedTopic;
+  String? _selectedTag;
 
   bool _isSaving = false;
   String? _errorMessage;
@@ -15812,6 +15808,15 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
   Map<int, double> _moduleUploadProgress = {};
   Map<int, bool> _moduleUploading = {};
 
+  // Document management
+  List<Map<String, dynamic>> _documents = [];
+  bool _isLoadingDocuments = true;
+
+  // Document upload state
+  Map<int, PlatformFile?> _documentFiles = {};
+  Map<int, double> _documentUploadProgress = {};
+  Map<int, bool> _documentUploading = {};
+
   @override
   void initState() {
     super.initState();
@@ -15820,10 +15825,25 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
         TextEditingController(text: data['course_name'] ?? data['title'] ?? '');
     _descriptionController =
         TextEditingController(text: data['description'] ?? '');
-    _selectedTopic = data['topic'];
+    // Valid topic options for dropdown
+    const validTopics = ['THINK', 'KEEP', 'ACCELERATE', 'TRANSFORM', 'ABUNDANCE', 'Expert Series', 'Immersive Footage'];
+    final topic = data['topic'];
+    _selectedTopic = (topic != null && validTopics.contains(topic)) ? topic : null;
+    
+    // Valid tag options for dropdown
+    const validTags = ['No Tags', 'Featured', 'New', 'Immersive'];
+    final tags = data['tags'];
+    if (tags is List && tags.isNotEmpty) {
+      final firstTag = tags.first?.toString();
+      _selectedTag = (firstTag != null && validTags.contains(firstTag)) ? firstTag : 'No Tags';
+    } else {
+      _selectedTag = 'No Tags';
+    }
 
     // Load video modules asynchronously from DocumentReferences
     _loadVideoModules();
+    // Load document modules asynchronously from DocumentReferences
+    _loadDocumentModules();
   }
 
   /// Loads video modules from the 'videos' field which contains DocumentReferences
@@ -15889,6 +15909,331 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
         setState(() => _isLoadingModules = false);
       }
     }
+  }
+
+  /// Loads document modules from the 'docs' field which contains DocumentReferences
+  Future<void> _loadDocumentModules() async {
+    try {
+      final docsField = widget.course.originalData['docs'];
+      if (docsField is! List) {
+        setState(() => _isLoadingDocuments = false);
+        return;
+      }
+
+      // Extract document IDs from DocumentReferences
+      List<String> docIds = [];
+      for (final item in docsField) {
+        if (item is DocumentReference) {
+          docIds.add(item.id);
+        } else if (item is String && item.isNotEmpty) {
+          if (item.startsWith('/documents/')) {
+            docIds.add(item.split('/').last);
+          } else {
+            docIds.add(item);
+          }
+        }
+      }
+
+      // Fetch document records
+      final documents = <Map<String, dynamic>>[];
+      final docsCollection = FirebaseFirestore.instance.collection('document');
+
+      for (final id in docIds) {
+        try {
+          final doc = await docsCollection.doc(id).get();
+          if (doc.exists) {
+            final data = doc.data()!;
+            documents.add({
+              'id': doc.id,
+              'title': data['title'] ?? data['doc_name'] ?? data['document_name'] ?? '',
+              'docUrl': data['docUrl'] ?? data['supporting_file_url'] ?? '',
+              'description': data['description'] ?? data['content_description'] ?? '',
+              'file_name': data['supporting_file_name'] ?? '',
+            });
+          }
+        } catch (e) {
+          debugPrint('Error fetching document $id: $e');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _documents = documents;
+          _isLoadingDocuments = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading documents: $e');
+      if (mounted) {
+        setState(() => _isLoadingDocuments = false);
+      }
+    }
+  }
+
+  /// Pick a document file for a specific entry
+  Future<void> _pickDocumentForModule(int index) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'],
+        withData: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _documentFiles[index] = result.files.first;
+        });
+        // Start upload immediately after picking
+        await _uploadDocumentForModule(index);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error selecting document: $e')),
+        );
+      }
+    }
+  }
+
+  /// Upload document for a specific entry to Firebase Storage
+  Future<void> _uploadDocumentForModule(int index) async {
+    final file = _documentFiles[index];
+    if (file == null || file.bytes == null) return;
+
+    setState(() {
+      _documentUploading[index] = true;
+      _documentUploadProgress[index] = 0;
+    });
+
+    try {
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final storagePath = 'document/$fileName';
+      final contentType = _getDocumentContentType(file.extension);
+
+      debugPrint('📤 Starting document upload to $storagePath');
+      final storageRef = FirebaseStorage.instance.ref().child(storagePath);
+      final uploadTask = storageRef.putData(
+        file.bytes!,
+        SettableMetadata(contentType: contentType),
+      );
+
+      uploadTask.snapshotEvents.listen((snapshot) {
+        final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+        if (mounted) {
+          setState(() {
+            _documentUploadProgress[index] = progress;
+          });
+        }
+      });
+
+      final snapshot = await uploadTask;
+      final url = await snapshot.ref.getDownloadURL();
+      debugPrint('✅ Document upload complete: $url');
+
+      if (mounted) {
+        setState(() {
+          _documents[index]['docUrl'] = url;
+          _documents[index]['file_name'] = file.name;
+          _documentUploading[index] = false;
+          _documentFiles[index] = null;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Error uploading document: $e');
+      if (mounted) {
+        setState(() {
+          _documentUploading[index] = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload document: $e')),
+        );
+      }
+    }
+  }
+
+  String _getDocumentContentType(String? extension) {
+    if (extension == null) return 'application/octet-stream';
+    final ext = extension.toLowerCase();
+    switch (ext) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+      case 'docx':
+        return 'application/msword';
+      case 'ppt':
+      case 'pptx':
+        return 'application/vnd.ms-powerpoint';
+      case 'xls':
+      case 'xlsx':
+        return 'application/vnd.ms-excel';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  void _addDocument() {
+    setState(() {
+      _documents.add({
+        'title': 'New Document ${_documents.length + 1}',
+        'docUrl': '',
+        'file_name': '',
+      });
+    });
+  }
+
+  void _removeDocument(int index) {
+    setState(() {
+      _documents.removeAt(index);
+      _documentFiles.remove(index);
+      _documentUploadProgress.remove(index);
+      _documentUploading.remove(index);
+    });
+  }
+
+  void _updateDocument(int index, String field, String value) {
+    setState(() {
+      _documents[index][field] = value;
+    });
+  }
+
+  /// Builds the document upload section for a document entry
+  Widget _buildDocumentUploadSection(int index, Map<String, dynamic> document) {
+    final isUploading = _documentUploading[index] == true;
+    final progress = _documentUploadProgress[index] ?? 0;
+    final selectedFile = _documentFiles[index];
+    final currentDocUrl = document['docUrl'] as String?;
+    final hasDocument = currentDocUrl != null && currentDocUrl.isNotEmpty;
+    final fileName = document['file_name'] as String? ?? '';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (isUploading) ...[
+            // Uploading state
+            Row(
+              children: [
+                const Icon(Icons.cloud_upload, color: _accentBlue, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Uploading ${selectedFile?.name ?? "document"}...',
+                    style: const TextStyle(
+                      color: _titleColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(
+                  '${(progress * 100).toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                    color: _accentBlue,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: const Color(0xFFE2E8F0),
+                valueColor: const AlwaysStoppedAnimation<Color>(_accentBlue),
+                minHeight: 6,
+              ),
+            ),
+          ] else if (hasDocument) ...[
+            // Has existing document
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCFCE7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.description, color: Color(0xFF22C55E), size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Document uploaded',
+                        style: TextStyle(
+                          color: Color(0xFF22C55E),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        fileName.isNotEmpty ? fileName : _extractFilename(currentDocUrl),
+                        style: const TextStyle(
+                          color: _mutedColor,
+                          fontSize: 11,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _pickDocumentForModule(index),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Replace'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: _accentBlue,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            // No document - show upload button
+            InkWell(
+              onTap: () => _pickDocumentForModule(index),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDBEAFE),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.add, color: _accentBlue, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Upload Document',
+                      style: TextStyle(
+                        color: _accentBlue,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   /// Pick a video file for a specific module
@@ -16228,17 +16573,101 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
     });
 
     try {
+      // 1. Ensure all modules have corresponding documents in 'video' collection
+      final videoCollection = FirebaseFirestore.instance.collection('video');
+      final updatedModules = <Map<String, dynamic>>[];
+      final videoRefs = <DocumentReference>[];
+
+      for (final module in _modules) {
+        final moduleData = Map<String, dynamic>.from(module);
+        
+        // Determine ID: use existing or generate new
+        String videoId = moduleData['id'] as String? ?? '';
+        DocumentReference videoRef;
+        
+        if (videoId.isNotEmpty) {
+          videoRef = videoCollection.doc(videoId);
+        } else {
+          videoRef = videoCollection.doc();
+          videoId = videoRef.id;
+          moduleData['id'] = videoId; // Save ID to module data
+        }
+
+        // Prepare video document data
+        final videoDocData = {
+          'title': moduleData['title'] ?? 'Untitled Module',
+          'description': moduleData['description'] ?? '',
+          'videoUrl': moduleData['videoUrl'] ?? '',
+          'duration': moduleData['duration'] ?? '',
+          'courseId': widget.course.id,
+          'topic': _selectedTopic,
+          'is_module': true,
+          'updated_at': FieldValue.serverTimestamp(),
+          // Use current time for created_at if it's a new doc, but we use set/merge
+          // so we can't easily conditionally set it without a separate read or check.
+          // For now, updated_at is sufficient.
+        };
+
+        // Create or update the video document
+        await videoRef.set(videoDocData, SetOptions(merge: true));
+        
+        updatedModules.add(moduleData);
+        videoRefs.add(videoRef);
+      }
+
+      // 2. Ensure all documents have corresponding records in 'documents' collection
+      final docsCollection = FirebaseFirestore.instance.collection('document');
+      final docRefs = <DocumentReference>[];
+
+      for (final document in _documents) {
+        final docData = Map<String, dynamic>.from(document);
+        
+        // Determine ID: use existing or generate new
+        String docId = docData['id'] as String? ?? '';
+        DocumentReference docRef;
+        
+        if (docId.isNotEmpty) {
+          docRef = docsCollection.doc(docId);
+        } else {
+          docRef = docsCollection.doc();
+          docId = docRef.id;
+          docData['id'] = docId;
+        }
+
+        // Prepare document data
+        final docRecord = {
+          'doc_name': docData['title'] ?? 'Untitled Document',
+          'title': docData['title'] ?? 'Untitled Document',
+          'docUrl': docData['docUrl'] ?? '',
+          'supporting_file_url': docData['docUrl'] ?? '',
+          'supporting_file_name': docData['file_name'] ?? '',
+          'courseId': widget.course.id,
+          'topic': _selectedTopic,
+          'updated_at': FieldValue.serverTimestamp(),
+        };
+
+        // Create or update the document record
+        await docRef.set(docRecord, SetOptions(merge: true));
+        docRefs.add(docRef);
+      }
+
+      // 3. Update the course document with videos and docs arrays
       final updateData = <String, dynamic>{
         'course_name': _courseNameController.text.trim(),
         'title': _courseNameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'topic': _selectedTopic,
-        'modules': _modules,
+        'tags': _selectedTag != null && _selectedTag != 'No Tags' ? [_selectedTag] : [],
+        'modules': updatedModules,
+        'videos': videoRefs,
+        'video_count': videoRefs.length,
+        'docs': docRefs,
+        'doc_count': docRefs.length,
         'updated_at': FieldValue.serverTimestamp(),
       };
 
       await FirebaseFirestore.instance
-          .collection('video')
+          .collection('courses')
           .doc(widget.course.id)
           .update(updateData);
 
@@ -16428,6 +16857,25 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
                     ),
                     const SizedBox(height: 20),
                     _buildLabeledField(
+                      label: 'Tags',
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedTag,
+                        items: const [
+                          DropdownMenuItem(value: 'No Tags', child: Text('No Tags')),
+                          DropdownMenuItem(value: 'Featured', child: Text('Featured')),
+                          DropdownMenuItem(value: 'New', child: Text('New')),
+                          DropdownMenuItem(value: 'Immersive', child: Text('Immersive')),
+                        ],
+                        decoration: _inputDecoration('Select tag'),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedTag = value;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildLabeledField(
                       label: 'Description',
                       child: TextField(
                         controller: _descriptionController,
@@ -16551,9 +16999,9 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
-                                    child: TextField(
-                                      controller: TextEditingController(
-                                          text: module['title'] ?? ''),
+                                    child: TextFormField(
+                                      key: ValueKey('module_title_$index'),
+                                      initialValue: module['title'] ?? '',
                                       decoration: _inputDecoration('Module title'),
                                       onChanged: (value) =>
                                           _updateModule(index, 'title', value),
@@ -16572,14 +17020,152 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
                               // Video upload section instead of URL field
                               _buildVideoUploadSection(index, module),
                               const SizedBox(height: 12),
-                              TextField(
-                                controller: TextEditingController(
-                                    text: module['description'] ?? ''),
+                              TextFormField(
+                                key: ValueKey('module_desc_$index'),
+                                initialValue: module['description'] ?? '',
                                 decoration: _inputDecoration('Module description'),
                                 maxLines: 2,
                                 onChanged: (value) =>
                                     _updateModule(index, 'description', value),
                               ),
+                            ],
+                          ),
+                        );
+                      }),
+                    const SizedBox(height: 32),
+                    // Documents section
+                    Row(
+                      children: [
+                        const Text(
+                          'Supporting Documents',
+                          style: TextStyle(
+                            color: _titleColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: _addDocument,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add Document'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: _accentBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (_isLoadingDocuments)
+                      Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Center(
+                          child: Column(
+                            children: const [
+                              SizedBox(
+                                width: 32,
+                                height: 32,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'Loading documents...',
+                                style: TextStyle(
+                                  color: _mutedColor,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (_documents.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              const Icon(Icons.folder_outlined,
+                                  size: 48, color: _mutedColor),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'No documents yet',
+                                style: TextStyle(
+                                  color: _mutedColor,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: _addDocument,
+                                child: const Text('Add your first document'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      ...List.generate(_documents.length, (index) {
+                        final document = _documents[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Icon(
+                                      Icons.description_outlined,
+                                      color: const Color(0xFF8B5CF6),
+                                      size: 18,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextFormField(
+                                      key: ValueKey('doc_title_$index'),
+                                      initialValue: document['title'] ?? '',
+                                      decoration: _inputDecoration('Document title'),
+                                      onChanged: (value) =>
+                                          _updateDocument(index, 'title', value),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    onPressed: () => _removeDocument(index),
+                                    icon: const Icon(Icons.delete_outline,
+                                        color: Color(0xFFEF4444)),
+                                    tooltip: 'Remove document',
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Document upload section
+                              _buildDocumentUploadSection(index, document),
                             ],
                           ),
                         );
@@ -41034,7 +41620,7 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       await FirebaseFirestore.instance
-          .collection('video')
+          .collection('courses')
           .doc(course.id)
           .delete();
       messenger?.showSnackBar(

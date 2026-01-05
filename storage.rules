@@ -31,7 +31,6 @@ service firebase.storage {
     
     // Course content assets (e.g., cover images)
     // Authenticated users can read. Writes limited to authenticated users.
-    // If you later add admin custom claims, update this to check request.auth.token.admin == true
     match /courses/{courseId}/{allPaths=**} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
