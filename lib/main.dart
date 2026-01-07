@@ -16155,39 +16155,8 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
           ] else if (hasDocument) ...[
             // Has existing document
             Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDCFCE7),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.description, color: Color(0xFF22C55E), size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Document uploaded',
-                        style: TextStyle(
-                          color: Color(0xFF22C55E),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        fileName.isNotEmpty ? fileName : _extractFilename(currentDocUrl),
-                        style: const TextStyle(
-                          color: _mutedColor,
-                          fontSize: 11,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
                 TextButton.icon(
                   onPressed: () => _pickDocumentForModule(index),
                   icon: const Icon(Icons.refresh, size: 16),
