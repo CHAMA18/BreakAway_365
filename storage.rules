@@ -28,6 +28,12 @@ service firebase.storage {
       allow read: if isAuthenticated();
       allow write: if isOwner(userId);
     }
+
+    // Agency profile images
+    match /agencies/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
     
     // Course content assets (e.g., cover images)
     // Authenticated users can read. Writes limited to authenticated users.

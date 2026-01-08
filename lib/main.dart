@@ -6537,13 +6537,24 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   void _closeAgencyDetails() {
-    if (!_showAgencyDetailModal) {
-      return;
-    }
     setState(() {
       _showAgencyDetailModal = false;
       _selectedAgencyDetail = null;
     });
+  }
+
+  Future<void> _editAgency(_AdminAgencyCardData agency) async {
+    _closeAgencyDetails();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AdminAddAgencyPage(
+          displayName: widget.displayName,
+          roleLabel: widget.roleLabel,
+          profileImageUrl: widget.profileImageUrl,
+          agency: agency,
+        ),
+      ),
+    );
   }
 
   void _openAgencyMembersModal(String agencyName) {
@@ -7118,6 +7129,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                               agency: agency,
                               snapshot: agencySnapshot,
                               onClose: _closeAgencyDetails,
+                              onEdit: () => _editAgency(agency),
                               onManageMembers: () =>
                                   _navigateToMemberManagementWithFilter(
                                       agency.name),
@@ -7172,6 +7184,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                   await batch.commit();
 
                                   if (context.mounted) {
+                                    // Close the details view immediately upon success
+                                    _closeAgencyDetails();
+                                    
                                     ScaffoldMessenger.of(context)
                                       ..hideCurrentSnackBar()
                                       ..showSnackBar(
@@ -7181,7 +7196,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                           duration: const Duration(seconds: 3),
                                         ),
                                       );
-                                    _closeAgencyDetails();
                                   }
                                 } catch (e) {
                                   debugPrint('Error deleting agency: $e');
@@ -7526,11 +7540,13 @@ class AdminAddAgencyPage extends StatefulWidget {
     required this.displayName,
     this.roleLabel,
     this.profileImageUrl,
+    this.agency,
   });
 
   final String displayName;
   final String? roleLabel;
   final String? profileImageUrl;
+  final _AdminAgencyCardData? agency;
 
   @override
   State<AdminAddAgencyPage> createState() => _AdminAddAgencyPageState();
@@ -7552,6 +7568,7 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
 
   Uint8List? _profilePreviewBytes;
   String? _profileFileName;
+  String? profileImageUrl;
 
   bool _isSubmitting = false;
 
@@ -7559,6 +7576,49 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
   void initState() {
     super.initState();
     _loadMembers();
+    
+    // Prefill data if in edit mode
+    if (widget.agency != null) {
+      _agencyNameController.text = widget.agency!.name;
+      _locationController.text = widget.agency!.location;
+      
+      if (widget.agency!.logoUrl != null && widget.agency!.logoUrl!.isNotEmpty) {
+        profileImageUrl = widget.agency!.logoUrl;
+        _profileFileName = 'Existing Image';
+      }
+      
+      // Fetch details not in the card data (summary, member IDs)
+      FirebaseFirestore.instance
+          .collection('agencies')
+          .doc(widget.agency!.id)
+          .get()
+          .then((doc) {
+        if (doc.exists && mounted) {
+          final data = doc.data();
+          if (data != null) {
+            setState(() {
+              if (data['summary'] != null) {
+                _agencySummaryController.text = data['summary'];
+              }
+              if (data['agency_summary'] != null && _agencySummaryController.text.isEmpty) {
+                 _agencySummaryController.text = data['agency_summary'];
+              }
+              
+              // Prefill members
+              if (data['assignedMemberIds'] != null) {
+                 _selectedMemberIds = List<String>.from(data['assignedMemberIds']);
+              } else if (data['members'] != null && data['members'] is List) {
+                 // members might be list of refs
+                 final membersList = data['members'] as List;
+                 if (membersList.isNotEmpty && membersList.first is DocumentReference) {
+                    _selectedMemberIds = membersList.map((ref) => (ref as DocumentReference).id).toList();
+                 }
+              }
+            });
+          }
+        }
+      });
+    }
   }
 
   @override
@@ -7936,14 +7996,18 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
         final timestamp = DateTime.now().millisecondsSinceEpoch;
         final sanitizedFileName =
             _profileFileName!.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-        final gcsFileName =
+        final storagePath =
             'agencies/$agencyName-$timestamp-$sanitizedFileName';
-
-        profileImageUrl = await GCSService.uploadFile(
-          fileName: gcsFileName,
-          fileBytes: _profilePreviewBytes!,
-          contentType: 'image/jpeg',
+        
+        // Use Firebase Storage for agency profile images instead of direct GCS
+        final storageRef = FirebaseStorage.instance.ref().child(storagePath);
+        final uploadTask = storageRef.putData(
+          _profilePreviewBytes!,
+          SettableMetadata(contentType: 'image/jpeg'),
         );
+        
+        final snapshot = await uploadTask;
+        profileImageUrl = await snapshot.ref.getDownloadURL();
 
         debugPrint('✅ Agency profile image uploaded: $profileImageUrl');
       }
@@ -7958,7 +8022,7 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
         'agency_name': agencyName,
         'summary': _agencySummaryController.text.trim(),
         'location': _locationController.text.trim(),
-        'profileImageUrl': profileImageUrl,
+        'profile_image': profileImageUrl, // Match the field name used by _AdminAgencyCardData
         'createdBy': currentUser.uid,
         'createdByName':
             currentUser.displayName ?? currentUser.email ?? 'Unknown',
@@ -7978,19 +8042,47 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
 
       debugPrint('💾 Saving agency to Firestore: $agencyName');
 
-      final docRef = await FirebaseFirestore.instance
-          .collection('agencies')
-          .add(agencyData);
-
-      debugPrint('✅ Agency created successfully with ID: ${docRef.id}');
+      String agencyId;
+      if (widget.agency != null) {
+         // UPDATE existing agency
+         agencyId = widget.agency!.id!;
+         final Map<String, dynamic> updateData = {
+            'agency_name': agencyName,
+            'summary': _agencySummaryController.text.trim(),
+            'agency_summary': _agencySummaryController.text.trim(), // Keep legacy field in sync
+            'location': _locationController.text.trim(),
+            'updatedAt': FieldValue.serverTimestamp(),
+         };
+         
+         if (profileImageUrl != null) {
+            updateData['profile_image'] = profileImageUrl;
+         }
+         
+         // Member logic
+         if (_selectedMemberIds.isNotEmpty) {
+            updateData.addAll({
+              'assignedMemberIds': _selectedMemberIds,
+              'assignedMemberNames': selectedMembers.map((m) => m.name).toList(),
+              'memberCount': _selectedMemberIds.length,
+            });
+         }
+         
+         await FirebaseFirestore.instance.collection('agencies').doc(agencyId).update(updateData);
+         debugPrint('✅ Agency updated successfully with ID: $agencyId');
+      } else { 
+         // CREATE new agency
+         final docRef = await FirebaseFirestore.instance
+            .collection('agencies')
+            .add(agencyData);
+         agencyId = docRef.id;
+         debugPrint('✅ Agency created successfully with ID: $agencyId');
+      }
 
       // Update selected members with agency name and add them to agency's members field
       if (_selectedMemberIds.isNotEmpty) {
         final batch = FirebaseFirestore.instance.batch();
         final agencyRef =
-            FirebaseFirestore.instance.collection('agencies').doc(docRef.id);
-
-        // Add member references to agency's members field
+            FirebaseFirestore.instance.collection('agencies').doc(agencyId);
         final memberRefs = _selectedMemberIds
             .map((memberId) =>
                 FirebaseFirestore.instance.collection('users').doc(memberId))
@@ -8119,8 +8211,8 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Create your agency',
+                        Text(
+                          widget.agency != null ? 'Edit Agency' : 'Create your agency',
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
@@ -8167,36 +8259,8 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
                                         border: Border.all(
                                             color: const Color(0xFFE0E7FF)),
                                       ),
-                                      child: _profilePreviewBytes == null
-                                          ? Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: const [
-                                                Icon(
-                                                  Icons.image_outlined,
-                                                  size: 48,
-                                                  color: Color(0xFF94A3B8),
-                                                ),
-                                                SizedBox(height: 12),
-                                                Text(
-                                                  'Upload a compelling cover image',
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: Color(0xFF475569),
-                                                  ),
-                                                ),
-                                                SizedBox(height: 6),
-                                                Text(
-                                                  'PNG or JPG • 1200 x 800 recommended',
-                                                  style: TextStyle(
-                                                    fontSize: 13,
-                                                    color: Color(0xFF94A3B8),
-                                                  ),
-                                                ),
-                                              ],
-                                            )
-                                          : ClipRRect(
+                                      child: _profilePreviewBytes != null
+                                          ? ClipRRect(
                                               borderRadius:
                                                   BorderRadius.circular(32),
                                               child: Stack(
@@ -8256,7 +8320,103 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
                                                   ),
                                                 ],
                                               ),
-                                            ),
+                                            )
+                                          : (profileImageUrl != null &&
+                                                  profileImageUrl!.isNotEmpty)
+                                              ? ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(32),
+                                                  child: Stack(
+                                                    fit: StackFit.expand,
+                                                    children: [
+                                                      Image.network(
+                                                        profileImageUrl!,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (context,
+                                                                error,
+                                                                stackTrace) =>
+                                                            Container(
+                                                          color: const Color(
+                                                              0xFFF1F5F9),
+                                                          child: const Center(
+                                                            child: Icon(
+                                                              Icons
+                                                                  .broken_image_rounded,
+                                                              color: Color(
+                                                                  0xFF94A3B8),
+                                                              size: 48,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      Positioned(
+                                                        right: 16,
+                                                        bottom: 16,
+                                                        child: DecoratedBox(
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: Colors.black
+                                                                .withOpacity(
+                                                                    0.55),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        16),
+                                                          ),
+                                                          child: const Padding(
+                                                            padding:
+                                                                EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 14,
+                                                              vertical: 8,
+                                                            ),
+                                                            child: Text(
+                                                              'Current Image',
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 13,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                )
+                                              : Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: const [
+                                                    Icon(
+                                                      Icons.image_outlined,
+                                                      size: 48,
+                                                      color: Color(0xFF94A3B8),
+                                                    ),
+                                                    SizedBox(height: 12),
+                                                    Text(
+                                                      'Upload a compelling cover image',
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight: FontWeight.w600,
+                                                        color:
+                                                            Color(0xFF475569),
+                                                      ),
+                                                    ),
+                                                    SizedBox(height: 6),
+                                                    Text(
+                                                      'PNG or JPG • 1200 x 800 recommended',
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        color:
+                                                            Color(0xFF94A3B8),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                     ),
                                   ),
                                   const SizedBox(height: 32),
@@ -8378,8 +8538,12 @@ class _AdminAddAgencyPageState extends State<AdminAddAgencyPage> {
                                             const SizedBox(width: 10),
                                             Text(
                                               _isSubmitting
-                                                  ? 'Creating…'
-                                                  : 'Create Agency',
+                                                  ? (widget.agency != null
+                                                      ? 'Saving…'
+                                                      : 'Creating…')
+                                                  : (widget.agency != null
+                                                      ? 'Save Changes'
+                                                      : 'Create Agency'),
                                               style: const TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w700,
@@ -14662,16 +14826,7 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
       return;
     }
 
-    // Validate that if supporting file is uploaded, description is mandatory
-    if (_selectedSupportingFile != null &&
-        _contentDescriptionController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Please enter a description for the supporting material')),
-      );
-      return;
-    }
+    // Validation for supporting file description removed as per requirement
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -17313,6 +17468,7 @@ class _AgencyDetailDialog extends StatelessWidget {
     required this.onClose,
     required this.onManageMembers,
     required this.onDelete,
+    required this.onEdit,
   });
 
   static const Color _titleColor = Color(0xFF0F172A);
@@ -17325,6 +17481,7 @@ class _AgencyDetailDialog extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onManageMembers;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -17375,6 +17532,15 @@ class _AgencyDetailDialog extends StatelessWidget {
                           foregroundColor: const Color(0xFFB91C1C),
                         ),
                         label: const Text('Delete agency'),
+                      ),
+                      const SizedBox(width: 16),
+                      TextButton.icon(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined),
+                        style: TextButton.styleFrom(
+                          foregroundColor: _accentBlue,
+                        ),
+                        label: const Text('Edit'),
                       ),
                       const Spacer(),
                       OutlinedButton.icon(
@@ -50267,6 +50433,7 @@ class _CourseMediaResolver {
     'playbackUrl',
     'playbackLink',
     'videoUrl',
+    'video_url', // Added to support snake_case storage keys
     'videoURL',
     'contentUrl',
     'mediaUrl',
