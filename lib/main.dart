@@ -1078,42 +1078,9 @@ class _MessageSearchAndActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Widget searchField = SizedBox(
-      height: 56,
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: 'Search members, conversations, or keywords',
-          hintStyle:
-              const TextStyle(color: MessagesPage._mutedColor, fontSize: 14),
-          prefixIcon: const Icon(Icons.search, color: MessagesPage._mutedColor),
-          suffixIcon: IconButton(
-            tooltip: 'Save search',
-            onPressed: () {},
-            icon: const Icon(Icons.bookmark_outline,
-                color: MessagesPage._mutedColor),
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: MessagesPage._borderColor),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide:
-                const BorderSide(color: MessagesPage._focusColor, width: 1.6),
-          ),
-        ),
-      ),
-    );
-
-    final List<Widget> quickActions = [
-      const _MessageQuickActionButton(icon: Icons.tune, label: 'Filters'),
-      const _MessageQuickActionButton(
-          icon: Icons.inbox_outlined, label: 'Archive'),
-      ElevatedButton.icon(
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ElevatedButton.icon(
         onPressed: onNewConversation,
         icon: const Icon(Icons.add_comment_outlined),
         label: const Text('New conversation'),
@@ -1127,35 +1094,6 @@ class _MessageSearchAndActions extends StatelessWidget {
           elevation: 0,
         ),
       ),
-    ];
-
-    if (isCompact) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          searchField,
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: quickActions,
-          ),
-        ],
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: searchField),
-        const SizedBox(width: 24),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          alignment: WrapAlignment.end,
-          children: quickActions,
-        ),
-      ],
     );
   }
 }
@@ -14928,12 +14866,13 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
       }
 
       // Add thumbnail if uploaded
+      String? uploadedThumbnailUrl;
       if (_selectedThumbnailFile != null) {
-        final thumbnailUrl =
+        uploadedThumbnailUrl =
             await _uploadFile(_selectedThumbnailFile!, 'thumbnail');
-        if (thumbnailUrl != null) {
-          videoData['thumbnailUrl'] = thumbnailUrl;
-          videoData['thumbnail'] = thumbnailUrl;
+        if (uploadedThumbnailUrl != null) {
+          videoData['thumbnailUrl'] = uploadedThumbnailUrl;
+          videoData['thumbnail'] = uploadedThumbnailUrl;
         }
       }
 
@@ -14942,7 +14881,7 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
       final videoDocId = videoDoc.id;
 
       // Create course document in 'courses' collection with references
-      final courseData = {
+      final courseData = <String, dynamic>{
         'course_name': _courseNameController.text.trim(),
         'title': _courseNameController.text.trim(),
         'description': _courseDescriptionController.text.trim(),
@@ -14954,6 +14893,12 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
         'created_at': FieldValue.serverTimestamp(),
         'updated_at': FieldValue.serverTimestamp(),
       };
+
+      // Add thumbnail to course document if uploaded
+      if (uploadedThumbnailUrl != null) {
+        courseData['thumbnailUrl'] = uploadedThumbnailUrl;
+        courseData['thumbnail'] = uploadedThumbnailUrl;
+      }
 
       // Add video reference as array (matching expected format for retrieval)
       courseData['videos'] = [
@@ -15556,6 +15501,73 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
                 ),
               );
 
+              final Widget thumbnailSection = _buildLabeledField(
+                label: 'Course Thumbnail',
+                child: GestureDetector(
+                  onTap: _pickThumbnailFile,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _selectedThumbnailFile != null
+                          ? Colors.green.shade50
+                          : const Color(0xFFF8FAFC),
+                      border: Border.all(
+                        color: _selectedThumbnailFile != null
+                            ? Colors.green
+                            : const Color(0xFFE2E8F0),
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_selectedThumbnailFile != null && _selectedThumbnailFile!.bytes != null) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.memory(
+                              _selectedThumbnailFile!.bytes!,
+                              height: 120,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        Row(
+                          children: [
+                            Icon(
+                              _selectedThumbnailFile != null
+                                  ? Icons.check_circle
+                                  : Icons.image_outlined,
+                              color: _selectedThumbnailFile != null
+                                  ? Colors.green
+                                  : _mutedColor,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _selectedThumbnailFile != null
+                                    ? _selectedThumbnailFile!.name
+                                    : 'Click to upload thumbnail image',
+                                style: TextStyle(
+                                  color: _selectedThumbnailFile != null
+                                      ? Colors.green.shade900
+                                      : _mutedColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+
               return _sectionCard(
                 title: 'Course Essentials',
                 subtitle:
@@ -15564,6 +15576,8 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
                   topFields,
                   const SizedBox(height: 24),
                   descriptionSection,
+                  const SizedBox(height: 24),
+                  thumbnailSection,
                 ],
               );
             },
@@ -15602,56 +15616,6 @@ class _AdminUploadContentDialogState extends State<_AdminUploadContentDialog> {
                     fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 24),
-              _buildLabeledField(
-                label: 'Upload Thumbnail',
-                child: GestureDetector(
-                  onTap: _pickThumbnailFile,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: _selectedThumbnailFile != null
-                          ? Colors.green.shade50
-                          : Colors.grey.shade50,
-                      border: Border.all(
-                        color: _selectedThumbnailFile != null
-                            ? Colors.green
-                            : Colors.grey.shade300,
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _selectedThumbnailFile != null
-                              ? Icons.check_circle
-                              : Icons.image_outlined,
-                          color: _selectedThumbnailFile != null
-                              ? Colors.green
-                              : Colors.grey.shade600,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _selectedThumbnailFile != null
-                                ? _selectedThumbnailFile!.name
-                                : 'Click to upload thumbnail image',
-                            style: TextStyle(
-                              color: _selectedThumbnailFile != null
-                                  ? Colors.green.shade900
-                                  : Colors.grey.shade700,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
               _buildLabeledField(
                 label: 'Video Title',
                 child: TextField(
@@ -15972,6 +15936,11 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
   Map<int, double> _documentUploadProgress = {};
   Map<int, bool> _documentUploading = {};
 
+  // Thumbnail upload state
+  PlatformFile? _selectedThumbnailFile;
+  String? _existingThumbnailUrl;
+  bool _isUploadingThumbnail = false;
+
   @override
   void initState() {
     super.initState();
@@ -15980,6 +15949,10 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
         TextEditingController(text: data['course_name'] ?? data['title'] ?? '');
     _descriptionController =
         TextEditingController(text: data['description'] ?? '');
+    
+    // Initialize existing thumbnail URL
+    _existingThumbnailUrl = data['thumbnailUrl'] as String? ?? data['thumbnail'] as String?;
+    
     // Valid topic options for dropdown
     const validTopics = ['THINK', 'KEEP', 'ACCELERATE', 'TRANSFORM', 'ABUNDANCE', 'Expert Series', 'Immersive Footage'];
     final topic = data['topic'];
@@ -16121,6 +16094,64 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
       debugPrint('Error loading documents: $e');
       if (mounted) {
         setState(() => _isLoadingDocuments = false);
+      }
+    }
+  }
+
+  /// Pick a thumbnail image file
+  Future<void> _pickThumbnailFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _selectedThumbnailFile = result.files.first;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error selecting thumbnail: $e')),
+        );
+      }
+    }
+  }
+
+  /// Upload thumbnail to Firebase Storage
+  Future<String?> _uploadThumbnailFile() async {
+    if (_selectedThumbnailFile == null || _selectedThumbnailFile!.bytes == null) {
+      return null;
+    }
+
+    setState(() => _isUploadingThumbnail = true);
+
+    try {
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${_selectedThumbnailFile!.name}';
+      final storagePath = 'thumbnail/$fileName';
+      final ref = FirebaseStorage.instance.ref().child(storagePath);
+
+      final metadata = SettableMetadata(
+        contentType: 'image/${_selectedThumbnailFile!.extension}',
+      );
+
+      await ref.putData(_selectedThumbnailFile!.bytes!, metadata);
+      final downloadUrl = await ref.getDownloadURL();
+
+      return downloadUrl;
+    } catch (e) {
+      debugPrint('Error uploading thumbnail: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error uploading thumbnail: $e')),
+        );
+      }
+      return null;
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingThumbnail = false);
       }
     }
   }
@@ -16775,7 +16806,13 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
         docRefs.add(docRef);
       }
 
-      // 3. Update the course document with videos and docs arrays
+      // 3. Upload new thumbnail if selected
+      String? newThumbnailUrl;
+      if (_selectedThumbnailFile != null) {
+        newThumbnailUrl = await _uploadThumbnailFile();
+      }
+
+      // 4. Update the course document with videos and docs arrays
       final updateData = <String, dynamic>{
         'course_name': _courseNameController.text.trim(),
         'title': _courseNameController.text.trim(),
@@ -16789,6 +16826,16 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
         'doc_count': docRefs.length,
         'updated_at': FieldValue.serverTimestamp(),
       };
+
+      // Add thumbnail if uploaded or exists
+      if (newThumbnailUrl != null) {
+        updateData['thumbnailUrl'] = newThumbnailUrl;
+        updateData['thumbnail'] = newThumbnailUrl;
+      } else if (_existingThumbnailUrl != null) {
+        // Keep existing thumbnail if no new one was uploaded
+        updateData['thumbnailUrl'] = _existingThumbnailUrl;
+        updateData['thumbnail'] = _existingThumbnailUrl;
+      }
 
       await FirebaseFirestore.instance
           .collection('courses')
@@ -17005,6 +17052,115 @@ class _AdminEditContentDialogState extends State<_AdminEditContentDialog> {
                         controller: _descriptionController,
                         decoration: _inputDecoration('Enter course description'),
                         maxLines: 3,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    // Thumbnail section
+                    _buildLabeledField(
+                      label: 'Course Thumbnail',
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Show existing or selected thumbnail
+                            if (_selectedThumbnailFile != null && _selectedThumbnailFile!.bytes != null) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.memory(
+                                  _selectedThumbnailFile!.bytes!,
+                                  height: 120,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _selectedThumbnailFile!.name,
+                                style: const TextStyle(color: _mutedColor, fontSize: 12),
+                              ),
+                            ] else if (_existingThumbnailUrl != null && _existingThumbnailUrl!.isNotEmpty) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  _existingThumbnailUrl!,
+                                  height: 120,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    height: 120,
+                                    color: const Color(0xFFE2E8F0),
+                                    child: const Center(
+                                      child: Icon(Icons.broken_image, color: _mutedColor),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Current thumbnail',
+                                style: TextStyle(color: _mutedColor, fontSize: 12),
+                              ),
+                            ] else ...[
+                              Container(
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE2E8F0),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.image_outlined, color: _mutedColor, size: 28),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'No thumbnail set',
+                                        style: TextStyle(color: _mutedColor, fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                if (_isUploadingThumbnail)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 12),
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                  ),
+                                TextButton.icon(
+                                  onPressed: _isUploadingThumbnail ? null : _pickThumbnailFile,
+                                  icon: Icon(
+                                    _existingThumbnailUrl != null || _selectedThumbnailFile != null
+                                        ? Icons.refresh
+                                        : Icons.add_photo_alternate_outlined,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    _existingThumbnailUrl != null || _selectedThumbnailFile != null
+                                        ? 'Replace Thumbnail'
+                                        : 'Add Thumbnail',
+                                  ),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: _accentBlue,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -20588,6 +20744,7 @@ class _CoachMemberProgressCard extends StatefulWidget {
 class _CoachMemberProgressCardState extends State<_CoachMemberProgressCard> {
   List<_MemberProgressData> _memberProgress = [];
   bool _loading = true;
+  String _coachId = '';
 
   @override
   void initState() {
@@ -20599,6 +20756,7 @@ class _CoachMemberProgressCardState extends State<_CoachMemberProgressCard> {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
+    _coachId = currentUser.uid;
     final firestore = FirebaseFirestore.instance;
     final currentUserRef = firestore.collection('users').doc(currentUser.uid);
 
@@ -20689,6 +20847,7 @@ class _CoachMemberProgressCardState extends State<_CoachMemberProgressCard> {
           }
 
           progressList.add(_MemberProgressData(
+            memberId: memberId,
             name: memberName.isEmpty ? 'Unnamed Member' : memberName,
             progress: 0.0, // Not used anymore
             nextSession: nextSessionDate,
@@ -20735,7 +20894,7 @@ class _CoachMemberProgressCardState extends State<_CoachMemberProgressCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Member Progress',
+            'Member Progress and Commitements',
             style: TextStyle(
               color: Color(0xFF111827),
               fontSize: 18,
@@ -20805,7 +20964,7 @@ class _CoachMemberProgressCardState extends State<_CoachMemberProgressCard> {
           else
             Column(
               children: _memberProgress
-                  .map((member) => _MemberProgressRow(data: member))
+                  .map((member) => _MemberProgressRow(data: member, coachId: _coachId))
                   .toList(),
             ),
         ],
@@ -20816,77 +20975,369 @@ class _CoachMemberProgressCardState extends State<_CoachMemberProgressCard> {
 
 class _MemberProgressData {
   const _MemberProgressData({
+    required this.memberId,
     required this.name,
     required this.progress,
     required this.nextSession,
   });
 
+  final String memberId;
   final String name;
   final double progress;
   final String nextSession;
 }
 
 class _MemberProgressRow extends StatelessWidget {
-  const _MemberProgressRow({required this.data});
+  const _MemberProgressRow({required this.data, required this.coachId});
 
   final _MemberProgressData data;
+  final String coachId;
+
+  void _showFeedbackDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => _CoachMemberFeedbackDialog(
+        memberId: data.memberId,
+        memberName: data.name,
+        coachId: coachId,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showFeedbackDialog(context),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.person_outline,
-                      color: Color(0xFF3B82F6),
-                      size: 18,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3B82F6).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.person_outline,
+                          color: Color(0xFF3B82F6),
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          data.name,
+                          style: const TextStyle(
+                            color: Color(0xFF1F2937),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    data.nextSession,
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 13,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      data.name,
-                      style: const TextStyle(
-                        color: Color(0xFF1F2937),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                ),
+                const Icon(
+                  Icons.chevron_right,
+                  color: Color(0xFF9CA3AF),
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dialog for coach to view member commitment and provide feedback
+class _CoachMemberFeedbackDialog extends StatefulWidget {
+  const _CoachMemberFeedbackDialog({
+    required this.memberId,
+    required this.memberName,
+    required this.coachId,
+  });
+
+  final String memberId;
+  final String memberName;
+  final String coachId;
+
+  @override
+  State<_CoachMemberFeedbackDialog> createState() =>
+      _CoachMemberFeedbackDialogState();
+}
+
+class _CoachMemberFeedbackDialogState extends State<_CoachMemberFeedbackDialog> {
+  final TextEditingController _feedbackController = TextEditingController();
+  String? _memberCommitment;
+  String? _docId;
+  bool _loading = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCommitmentData();
+  }
+
+  @override
+  void dispose() {
+    _feedbackController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCommitmentData() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('commitments')
+          .where('memberId', isEqualTo: widget.memberId)
+          .where('coachId', isEqualTo: widget.coachId)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        _docId = snapshot.docs.first.id;
+        _memberCommitment = data['memberCommitment'] as String?;
+        _feedbackController.text = data['coachFeedback'] as String? ?? '';
+      }
+
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    } catch (e) {
+      debugPrint('Error loading commitment: $e');
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _saveFeedback() async {
+    setState(() => _saving = true);
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final data = {
+        'memberId': widget.memberId,
+        'coachId': widget.coachId,
+        'coachFeedback': _feedbackController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (_docId != null) {
+        await firestore.collection('commitments').doc(_docId).update(data);
+      } else {
+        data['memberCommitment'] = '';
+        data['createdAt'] = FieldValue.serverTimestamp();
+        await firestore.collection('commitments').add(data);
+      }
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Feedback saved successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving feedback: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        width: 500,
+        padding: const EdgeInsets.all(28),
+        child: _loading
+            ? const SizedBox(
+                height: 200,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3B82F6).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.person_outline,
+                          color: Color(0xFF3B82F6),
+                          size: 22,
+                        ),
                       ),
-                      overflow: TextOverflow.ellipsis,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.memberName,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            const Text(
+                              'Member Commitment & Feedback',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    "Member's Commitment",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: Text(
+                      _memberCommitment?.isNotEmpty == true
+                          ? _memberCommitment!
+                          : 'Member has not submitted a commitment yet.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: _memberCommitment?.isNotEmpty == true
+                            ? const Color(0xFF1F2937)
+                            : const Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Your Feedback',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _feedbackController,
+                    minLines: 4,
+                    maxLines: 6,
+                    decoration: InputDecoration(
+                      hintText: 'Enter your feedback for this member...',
+                      hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.all(16),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF3B82F6), width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(color: Color(0xFF6B7280)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: _saving ? null : _saveFeedback,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3B82F6),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        child: _saving
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Save Feedback',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ),
-            Expanded(
-              child: Text(
-                data.nextSession,
-                style: const TextStyle(
-                  color: Color(0xFF6B7280),
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -20970,13 +21421,21 @@ class _CoachAnalyticsPageState extends State<CoachAnalyticsPage> {
     int unreadCount = 0;
     for (final chatDoc in chatsSnapshot.docs) {
       final chatData = chatDoc.data();
-      final lastMessageTime = chatData['lastMessageTime'] as Timestamp?;
-      final lastReadTime =
-          chatData['lastRead_${currentUser.uid}'] as Timestamp?;
-
-      if (lastMessageTime != null &&
-          (lastReadTime == null ||
-              lastMessageTime.compareTo(lastReadTime) > 0)) {
+      // Check unreadCounts map for current user's unread count
+      final unreadCounts = chatData['unreadCounts'] as Map<String, dynamic>?;
+      if (unreadCounts != null) {
+        final userUnread = unreadCounts[currentUser.uid];
+        if (userUnread is int && userUnread > 0) {
+          unreadCount += userUnread;
+        } else if (userUnread is num && userUnread > 0) {
+          unreadCount += userUnread.toInt();
+        }
+      }
+      // Also check unreadBy array as fallback
+      final unreadBy = chatData['unreadBy'] as List<dynamic>?;
+      if (unreadBy != null &&
+          unreadBy.contains(currentUser.uid) &&
+          unreadCounts == null) {
         unreadCount++;
       }
     }
@@ -32422,26 +32881,6 @@ class _MessagesPageState extends State<MessagesPage> {
 
   void _scrollToSection(String tab) {
     setState(() => _activeTab = tab);
-    GlobalKey? key;
-    switch (tab) {
-      case 'My Chats':
-        key = _myChatsKey;
-        break;
-      case 'Unread':
-        key = _unreadKey;
-        break;
-      case 'Groups':
-        key = _groupsKey;
-        break;
-    }
-    if (key?.currentContext != null) {
-      Scrollable.ensureVisible(
-        key!.currentContext!,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-        alignment: 0.1,
-      );
-    }
   }
 
   Future<void> _openNewConversation() async {
@@ -32537,30 +32976,31 @@ class _MessagesPageState extends State<MessagesPage> {
               const SizedBox(height: 24),
               tabs,
               const SizedBox(height: 24),
-              _MessageSectionCard(
-                key: _myChatsKey,
-                icon: Icons.forum_outlined,
-                title: 'My Chats',
-                subtitle:
-                    'Pick up where you left off and respond with momentum.',
-                child: _MyChatsStrip(onChatSelected: _handleChatSelected),
-              ),
-              const SizedBox(height: 20),
-              _MessageSectionCard(
-                key: _unreadKey,
-                icon: Icons.notifications_active_outlined,
-                title: 'Unread',
-                subtitle: 'All the conversations waiting for your response.',
-                child: _UnreadChatsStrip(onChatSelected: _handleChatSelected),
-              ),
-              const SizedBox(height: 20),
-              _MessageSectionCard(
-                key: _groupsKey,
-                icon: Icons.groups_outlined,
-                title: 'Groups',
-                subtitle: 'Stay in sync with community and cohort chatter.',
-                child: _GroupChatsStrip(onChatSelected: _handleChatSelected),
-              ),
+              if (_activeTab == 'My Chats')
+                _MessageSectionCard(
+                  key: _myChatsKey,
+                  icon: Icons.forum_outlined,
+                  title: 'My Chats',
+                  subtitle:
+                      'Pick up where you left off and respond with momentum.',
+                  child: _MyChatsStrip(onChatSelected: _handleChatSelected),
+                ),
+              if (_activeTab == 'Unread')
+                _MessageSectionCard(
+                  key: _unreadKey,
+                  icon: Icons.notifications_active_outlined,
+                  title: 'Unread',
+                  subtitle: 'All the conversations waiting for your response.',
+                  child: _UnreadChatsStrip(onChatSelected: _handleChatSelected),
+                ),
+              if (_activeTab == 'Groups')
+                _MessageSectionCard(
+                  key: _groupsKey,
+                  icon: Icons.groups_outlined,
+                  title: 'Groups',
+                  subtitle: 'Stay in sync with community and cohort chatter.',
+                  child: _GroupChatsStrip(onChatSelected: _handleChatSelected),
+                ),
             ],
           ),
         );
@@ -35097,11 +35537,160 @@ class _CustomMetricTileState extends State<_CustomMetricTile> {
   }
 }
 
-class _CoachCommitmentCard extends StatelessWidget {
+class _CoachCommitmentCard extends StatefulWidget {
   const _CoachCommitmentCard();
 
   @override
+  State<_CoachCommitmentCard> createState() => _CoachCommitmentCardState();
+}
+
+class _CoachCommitmentCardState extends State<_CoachCommitmentCard> {
+  final TextEditingController _commitmentController = TextEditingController();
+  String? _coachFeedback;
+  String? _coachId;
+  String? _docId;
+  bool _loading = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    _commitmentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      setState(() => _loading = false);
+      return;
+    }
+
+    final memberId = currentUser.uid;
+    final firestore = FirebaseFirestore.instance;
+
+    try {
+      // First, find the coach for this member
+      final memberCoachQuery = await firestore
+          .collection('member_coach')
+          .where('memberref',
+              isEqualTo: firestore.collection('users').doc(memberId))
+          .limit(1)
+          .get();
+
+      String? coachId;
+      if (memberCoachQuery.docs.isNotEmpty) {
+        final data = memberCoachQuery.docs.first.data();
+        final coachRef = data['coachref'] as DocumentReference? ??
+            data['coach'] as DocumentReference?;
+        coachId = coachRef?.id;
+      }
+
+      // If not found via memberref, try membersAssigned array
+      if (coachId == null) {
+        final allCoachDocs = await firestore.collection('member_coach').get();
+        for (final doc in allCoachDocs.docs) {
+          final data = doc.data();
+          final membersAssigned = data['membersAssigned'] as List<dynamic>?;
+          if (membersAssigned != null) {
+            for (final ref in membersAssigned) {
+              if (ref is DocumentReference && ref.id == memberId) {
+                final coachRef = data['coachref'] as DocumentReference? ??
+                    data['coach'] as DocumentReference?;
+                coachId = coachRef?.id;
+                break;
+              }
+            }
+          }
+          if (coachId != null) break;
+        }
+      }
+
+      _coachId = coachId;
+
+      // Now load the commitment data if we have a coach
+      if (coachId != null) {
+        final commitmentQuery = await firestore
+            .collection('commitments')
+            .where('memberId', isEqualTo: memberId)
+            .where('coachId', isEqualTo: coachId)
+            .limit(1)
+            .get();
+
+        if (commitmentQuery.docs.isNotEmpty) {
+          final data = commitmentQuery.docs.first.data();
+          _docId = commitmentQuery.docs.first.id;
+          _commitmentController.text = data['memberCommitment'] as String? ?? '';
+          _coachFeedback = data['coachFeedback'] as String?;
+        }
+      }
+
+      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      debugPrint('Error loading commitment data: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _saveCommitment() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || _coachId == null) return;
+
+    setState(() => _saving = true);
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final data = {
+        'memberId': currentUser.uid,
+        'coachId': _coachId,
+        'memberCommitment': _commitmentController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (_docId != null) {
+        await firestore.collection('commitments').doc(_docId).update(data);
+      } else {
+        data['coachFeedback'] = '';
+        data['createdAt'] = FieldValue.serverTimestamp();
+        final docRef = await firestore.collection('commitments').add(data);
+        _docId = docRef.id;
+      }
+
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Commitment saved successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving commitment: $e')),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: ScorecardPage._borderColor),
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.fromLTRB(28, 28, 28, 32),
       decoration: BoxDecoration(
@@ -35136,9 +35725,16 @@ class _CoachCommitmentCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: ScorecardPage._borderColor),
             ),
-            child: const Text(
-              'Coach is yet to give feedback',
-              style: TextStyle(color: ScorecardPage._mutedColor, fontSize: 14),
+            child: Text(
+              _coachFeedback?.isNotEmpty == true
+                  ? _coachFeedback!
+                  : 'Coach is yet to give feedback',
+              style: TextStyle(
+                color: _coachFeedback?.isNotEmpty == true
+                    ? ScorecardPage._titleColor
+                    : ScorecardPage._mutedColor,
+                fontSize: 14,
+              ),
             ),
           ),
           const SizedBox(height: 28),
@@ -35152,6 +35748,7 @@ class _CoachCommitmentCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           TextField(
+            controller: _commitmentController,
             minLines: 4,
             maxLines: 6,
             decoration: InputDecoration(
@@ -35184,11 +35781,20 @@ class _CoachCommitmentCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
-              onPressed: () {},
-              child: const Text(
-                'Save commitment',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-              ),
+              onPressed: _saving ? null : _saveCommitment,
+              child: _saving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      'Save commitment',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                    ),
             ),
           ),
         ],
@@ -45985,35 +46591,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                                   size: 16),
                               label: const Text('Back to Library'),
                             ),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              child: SizedBox(
-                                height: 48,
-                                child: TextField(
-                                  decoration: InputDecoration(
-                                    hintText: 'Search for videos',
-                                    prefixIcon: const Icon(Icons.search,
-                                        color: ContentLibraryPage._mutedColor),
-                                    filled: true,
-                                    fillColor: Colors.white,
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                      borderSide: const BorderSide(
-                                          color:
-                                              ContentLibraryPage._borderColor),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                      borderSide: const BorderSide(
-                                          color: ContentLibraryPage._buttonBlue,
-                                          width: 1.4),
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 12),
-                                  ),
-                                ),
-                              ),
-                            ),
+
                           ],
                         ),
                       ),

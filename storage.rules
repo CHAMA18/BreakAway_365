@@ -29,6 +29,12 @@ service firebase.storage {
       allow write: if isOwner(userId);
     }
 
+    // Legacy/App profile images path
+    match /profile_images/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
     // Agency profile images
     match /agencies/{allPaths=**} {
       allow read: if true;
@@ -63,6 +69,24 @@ service firebase.storage {
     // Thumbnails used by courses/videos
     match /thumbnail/{allPaths=**} {
       allow read: if true; // thumbnails are safe to cache publicly
+      allow write: if isAuthenticated();
+    }
+
+    // Forum comment attachments
+    match /forum_comments/{forumId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Chat media attachments
+    match /chat_media/{chatId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Content/Course comment attachments
+    match /content_comments/{courseId}/{allPaths=**} {
+      allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
     
