@@ -12034,7 +12034,7 @@ class _AdminMemberManagementViewState
       );
     }
 
-    // For members with a coach: add "Reassign Coach" and "Upload Results" buttons
+    // For members with a coach: add "Reassign Coach"
     if (hasCoach) {
       actionButtons.add(const SizedBox(width: 6));
       actionButtons.add(
@@ -12058,6 +12058,10 @@ class _AdminMemberManagementViewState
           ),
         ),
       );
+    }
+
+    // For approved members (with or without coach): add "Upload Results" button
+    if (data.approved && data.role.toLowerCase() == 'member') {
       actionButtons.add(const SizedBox(width: 6));
       actionButtons.add(
         SizedBox(
